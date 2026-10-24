@@ -1,8 +1,17 @@
 import { test, expect, type Page } from './fixtures/auth'
 import path from 'node:path'
 
+// Legacy QR assets/components remain covered without publishing them in Pages.
+test.beforeEach(async ({ context }) => {
+  await context.route('**/demo-qr/*.png', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()
+    if (name !== 'banco-demo.png' && name !== 'billetera-demo.png') return route.abort()
+    return route.fulfill({ path: path.resolve('tests/fixtures/demo-qr', name) })
+  })
+})
+
 async function openSale(page: Page) {
-  await page.goto('/#/pos')
+  await page.goto('/tests/harness/payments.html#/pos')
   await page
     .getByRole('button', { name: 'Agregar Café de origen 500 g', exact: true })
     .click()
@@ -93,7 +102,7 @@ test('selección automática, QR fijo, importe exacto, ampliación, referencia y
   ).toHaveCount(2)
   await page.reload()
   await expect(page.locator('.payment-history tbody tr')).toHaveCount(1)
-  await page.goto('/#/contabilidad')
+  await page.goto('/tests/harness/payments.html#/contabilidad')
   await expect(page.locator('.payment-history tbody tr')).toContainText(
     'TR-DEMO-001',
   )
@@ -175,8 +184,8 @@ test('pago mixto conserva centavos exactos y separa transferencia de efectivo', 
 test('administrador carga PNG, JPG y WebP, cambia el QR y conserva configuración al recargar', async ({
   page,
 }) => {
-  await page.goto('/#/configuracion')
-  await addQr(page, 'QR PNG de pruebas', 'public/demo-qr/banco-demo.png')
+  await page.goto('/tests/harness/payments.html#/configuracion')
+  await addQr(page, 'QR PNG de pruebas', 'tests/fixtures/demo-qr/banco-demo.png')
   await addQr(page, 'QR JPG de pruebas', 'tests/fixtures/qr-demo.jpg')
   await addQr(page, 'QR WebP de pruebas', 'tests/fixtures/qr-demo.webp')
   await page.reload()
@@ -191,7 +200,7 @@ test('administrador carga PNG, JPG y WebP, cambia el QR y conserva configuració
   await card.getByRole('button', { name: 'Editar QR', exact: true }).click()
   await page
     .getByLabel('Imagen QR', { exact: true })
-    .setInputFiles(path.resolve('public/demo-qr/billetera-demo.png'))
+    .setInputFiles(path.resolve('tests/fixtures/demo-qr/billetera-demo.png'))
   await expect(
     page.getByRole('img', { name: 'Vista previa del QR cargado' }),
   ).toBeVisible()
@@ -213,7 +222,7 @@ test('administrador carga PNG, JPG y WebP, cambia el QR y conserva configuració
 test('formatos falsificados, SVG y tamaño excesivo se rechazan', async ({
   page,
 }) => {
-  await page.goto('/#/configuracion')
+  await page.goto('/tests/harness/payments.html#/configuracion')
   await page.getByRole('button', { name: 'Agregar QR', exact: true }).click()
   const fileInput = page.getByLabel('Imagen QR', { exact: true })
   await fileInput.setInputFiles({
@@ -241,7 +250,7 @@ test('formatos falsificados, SVG y tamaño excesivo se rechazan', async ({
 
 for (const role of ['Cajero', 'Supervisor']) {
   test(`${role} ve QR pero no puede modificarlos`, async ({ page }) => {
-    await page.goto('/#/configuracion')
+    await page.goto('/tests/harness/payments.html#/configuracion')
     await page.getByLabel('Rol de demostración').selectOption({ label: role })
     await expect(
       page.getByText('Solo lectura:', { exact: false }),
@@ -275,7 +284,7 @@ for (const role of ['Cajero', 'Supervisor']) {
 test('métodos desactivados no se ofrecen y ausencia de QR bloquea transferencias', async ({
   page,
 }) => {
-  await page.goto('/#/configuracion')
+  await page.goto('/tests/harness/payments.html#/configuracion')
   await expect(
     page.getByRole('button', { name: 'Desactivar', exact: true }),
   ).toHaveCount(2)
@@ -337,7 +346,7 @@ test('un QR desactivado en otra pestaña invalida una confirmación pendiente', 
   await selectTransfer(page)
   await verifyTransfer(page)
   const admin = await context.newPage()
-  await admin.goto('/#/configuracion')
+  await admin.goto('/tests/harness/payments.html#/configuracion')
   await admin
     .locator('.transfer-method-card')
     .filter({
@@ -384,7 +393,7 @@ test('dos clics rápidos no duplican la venta ni el historial', async ({
 test('la capa local rechaza escrituras de un cajero, además de ocultar los controles', async ({
   page,
 }) => {
-  await page.goto('/#/configuracion')
+  await page.goto('/tests/harness/payments.html#/configuracion')
   await expect(
     page.getByRole('button', { name: 'Editar QR', exact: true }),
   ).toHaveCount(2)

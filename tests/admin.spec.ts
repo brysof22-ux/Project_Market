@@ -64,12 +64,12 @@ test('filtros de inventario y estados vacíos', async ({ page }) => {
   ).toBeVisible()
 })
 
-test('carrito, límite de stock y simulación sin persistir ventas', async ({
+test('carrito, límite de stock y venta persistente que descuenta existencias', async ({
   page,
 }) => {
   await page.goto('/#/pos')
   await expect(
-    page.getByRole('button', { name: 'Simular venta', exact: true }),
+    page.getByRole('button', { name: 'Registrar venta', exact: true }),
   ).toBeDisabled()
   for (let i = 0; i < 8; i++)
     await page
@@ -89,46 +89,41 @@ test('carrito, límite de stock y simulación sin persistir ventas', async ({
     .getByRole('button', { name: 'Quitar una unidad de Café de origen 500 g' })
     .click()
   await expect(page.locator('.cart-total')).toContainText('199.500')
-  await page.getByRole('button', { name: 'Simular venta', exact: true }).click()
-  await expect(page.getByRole('dialog')).toContainText(
-    'No se ha realizado ningún cobro',
-  )
-  await page.getByRole('button', { name: 'Iniciar otra simulación' }).click()
+  await page.getByLabel('Pago Efectivo', { exact: true }).fill('199500')
+  await page.getByRole('checkbox', { name: /Confirmo los pagos recibidos/ }).check()
+  await page.getByRole('button', { name: 'Registrar venta', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Venta registrada en la tienda.' })).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Simular venta', exact: true }),
+    page.getByRole('button', { name: 'Registrar venta', exact: true }),
   ).toBeDisabled()
   await page.goto('/#/inventario')
   await expect(
     page.locator('tbody tr').filter({ hasText: 'CAF-001' }),
-  ).toContainText('8 unidades')
+  ).toContainText('1 unidades')
 })
 
-test('detalle de venta, filtro contable, CSV y períodos de gráfica', async ({
+test('detalle de venta real, CSV y períodos de gráfica', async ({
   page,
 }) => {
+  await page.goto('/#/pos')
+  await page.getByRole('button', { name: 'Agregar Café de origen 500 g' }).click()
+  await page.getByLabel('Pago Efectivo', { exact: true }).fill('28500')
+  await page.getByRole('checkbox', { name: /Confirmo los pagos recibidos/ }).check()
+  await page.getByRole('button', { name: 'Registrar venta', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Venta registrada en la tienda.' })).toBeVisible()
   await page.goto('/')
-  await page.getByRole('button', { name: 'Ver venta V-00842' }).click()
-  await expect(page.getByRole('dialog')).toContainText('María García')
+  await page.getByRole('button', { name: 'Ver venta V-1' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Café de origen')
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Este mes', exact: true }).click()
-  await expect(
-    page.getByRole('button', { name: 'Este mes', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true')
-  await page.getByRole('button', { name: 'Exportar reporte' }).click()
+  await page.getByRole('combobox', { name: 'Período de indicadores' }).selectOption('month')
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Descargar CSV simulado' }).click()
+  await page.getByRole('button', { name: 'Exportar reporte' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toBe('ventas-simuladas-2026-10-23.csv')
-  await page.getByRole('link', { name: 'Ver todas', exact: true }).click()
-  await page
-    .getByRole('combobox', { name: 'Estado de venta' })
-    .selectOption('Pendiente')
-  await expect(page.locator('tbody tr')).toHaveCount(1)
-  await expect(page.locator('tbody')).toContainText('Ana Martínez')
+  expect(download.suggestedFilename()).toMatch(/^reporte-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/)
 })
 
-test('tema persistente y validación de formulario sin almacenamiento', async ({
+test('tema y configuración persistentes con validación de formulario', async ({
   page,
 }) => {
   await page.goto('/#/configuracion')
@@ -137,15 +132,15 @@ test('tema persistente y validación de formulario sin almacenamiento', async ({
   await page.reload()
   await expect(page.locator('html')).toHaveClass('dark')
   await page.getByRole('textbox', { name: 'Nombre de la tienda' }).fill('   ')
-  await page.getByRole('button', { name: 'Validar datos de prueba' }).click()
-  await expect(page.getByRole('status')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Guardar operación', exact: true }).click()
+  await expect(page.getByText('Configuración guardada.', { exact: true })).toHaveCount(0)
   await page
     .getByRole('textbox', { name: 'Nombre de la tienda' })
     .fill('Tienda de prueba')
-  await page.getByRole('button', { name: 'Validar datos de prueba' }).click()
-  await expect(page.getByRole('status')).toContainText(
-    'no se guardó información',
-  )
+  await page.getByRole('button', { name: 'Guardar operación', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Configuración guardada.' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: 'Nombre de la tienda' })).toHaveValue('Tienda de prueba')
 })
 
 for (const viewport of [

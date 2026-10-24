@@ -11,26 +11,33 @@ export const ids = {
   session: '40000000-0000-0000-0000-000000000001',
 }
 
-export async function createDatabase() {
+export async function createDatabase(beforeProfile = false) {
   const db = new PGlite()
   await db.exec(`CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
+    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
+      SELECT coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+        nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'sub')::uuid $$;
     CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;
     CREATE ROLE authenticator NOLOGIN NOINHERIT; GRANT authenticated TO authenticator;`)
   // Exercise CREATE ROLE and ownership transfers without superuser privileges.
   await db.exec(`CREATE ROLE credit_migrator NOLOGIN CREATEROLE NOSUPERUSER;
     GRANT CREATE ON DATABASE postgres TO credit_migrator;
     GRANT USAGE ON SCHEMA auth TO credit_migrator;
+    GRANT USAGE, CREATE ON SCHEMA public TO credit_migrator WITH GRANT OPTION;
     GRANT REFERENCES ON auth.users TO credit_migrator;
     SET ROLE credit_migrator;`)
   const directory = path.resolve('supabase/migrations')
   for (const name of (await readdir(directory))
-    .filter((name) => name.endsWith('.sql'))
+    .filter((name) => name.endsWith('.sql') && (!beforeProfile || name < '20261023000500'))
     .sort()) {
     await db.exec(await readFile(path.join(directory, name), 'utf8'))
   }
   await db.exec('RESET ROLE')
   await db.exec(`CREATE OR REPLACE FUNCTION pos.business_now() RETURNS timestamptz LANGUAGE sql VOLATILE
     SET search_path = pg_catalog AS $$ SELECT timestamptz '2026-10-23 15:00:00+00' $$;`)
+  // Keep test-only defaults on the same clock as financial commands/reports.
+  await db.exec(`ALTER TABLE pos.cash_sessions ALTER COLUMN opened_at SET DEFAULT pos.business_now();
+    ALTER TABLE pos.payments ALTER COLUMN created_at SET DEFAULT pos.business_now();`)
   return db
 }
 

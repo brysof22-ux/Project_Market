@@ -29,6 +29,12 @@ dist-ssr
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+worker/api/.dry-run/
+.cache/
 
 # Supabase CLI
 supabase/.temp/
@@ -37,3 +43,24 @@ supabase/.temp/
 *.pem
 *.key
 
+
+# Archivos temporales de Wrangler
+.dry-run/
+
+# Respaldos PostgreSQL y credenciales locales (nunca publicar)
+backups/
+backup/
+respaldos/
+dumps/
+*.dump
+*.backup
+*.bak
+*.sql.gz
+*.sql.zip
+roles.sql
+schema.sql
+data.sql
+history_schema.sql
+history_data.sql
+.pgpass
+pgpass.conf

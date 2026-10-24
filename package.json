@@ -10,7 +10,12 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:credit": "node --wasm-num-compilation-tasks=1 --liftoff-only ./node_modules/@playwright/test/cli.js test -c playwright.credit.config.ts",
-    "check:credit": "tsc -p tsconfig.credit.json"
+    "check:credit": "tsc -p tsconfig.credit.json",
+    "check:api": "tsc -p worker/api/tsconfig.json && tsc -p tsconfig.api.json",
+    "check:deployment": "node scripts/check-deployment.mjs",
+    "check:frontend-config": "node scripts/check-frontend-config.mjs",
+    "test:api": "playwright test -c playwright.api.config.ts",
+    "dev:api": "npx wrangler@4 dev --config worker/api/wrangler.jsonc --local"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.3.1",

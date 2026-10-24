@@ -1,0 +1,4 @@
+# Separate diagnostic-only key, at least 32 characters. Never use a user JWT.
+DIAGNOSTIC_ACCESS_KEY=REPLACE_WITH_RANDOM_DIAGNOSTIC_ACCESS_KEY
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_PUBLIC_KEY

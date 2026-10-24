@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { AuthApiError, type Session } from '@supabase/supabase-js'
+import { isAuthApiError, type Session } from '@supabase/supabase-js'
 import { AUTH_STORAGE_KEY, getSupabaseClient } from '../../lib/supabase'
 import { AuthContext } from './context'
+import { api } from '../../lib/api'
+import { ApiError } from '../../lib/api-client'
+import type { StaffProfile } from '../../../shared/profile'
 
 function authMessage(cause: unknown) {
-  if (cause instanceof AuthApiError) {
+  if (isAuthApiError(cause)) {
     if (cause.code === 'invalid_credentials') return 'Correo o contraseña incorrectos.'
     if (cause.code === 'email_not_confirmed') return 'Confirma tu correo antes de iniciar sesión.'
     if (cause.status === 429) return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.'
+    return 'No pudimos iniciar sesión con esta cuenta. Revisa tus datos o contacta al administrador.'
   }
   return 'No pudimos conectar con el servicio de acceso. Comprueba tu conexión e inténtalo de nuevo.'
 }
@@ -18,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     catch (cause) { return { client: null, error: cause instanceof Error ? cause.message : 'Revisa la configuración de Supabase.' } }
   })
   const [session, setSession] = useState<Session | null>(null)
+  const [profile, setProfile] = useState<StaffProfile | null>(null)
   const [loading, setLoading] = useState(!!connection.client)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -32,9 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
     let eventReceived = false
     async function accept(candidate: Session | null) {
+      if (!active) return
       const version = ++revision.current
       if (!candidate) {
-        if (active) { setSession(null); if (!signingOut.current) setLoading(false) }
+        if (active) { setSession(null); setProfile(null); if (!signingOut.current) setLoading(false) }
         return
       }
       if (signingOut.current) return
@@ -45,15 +51,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active || version !== revision.current || signingOut.current) return
         if (verificationError || !data.user || data.user.id !== candidate.user.id || !candidate.expires_at || candidate.expires_at * 1000 <= Date.now()) {
           setSession(null)
+          setProfile(null)
           setError('Tu sesión ya no es válida. Inicia sesión de nuevo.')
         } else {
+          const nextProfile = await api.getMe()
+          if (!active || version !== revision.current || signingOut.current) return
+          if (nextProfile.id !== data.user.id || candidate.expires_at * 1000 <= Date.now()) {
+            throw new ApiError(401, 'UNAUTHORIZED', 'Tu sesión ya no es válida. Inicia sesión de nuevo.')
+          }
+          setProfile(nextProfile)
           setSession({ ...candidate, user: data.user })
           setError('')
         }
-      } catch {
+      } catch (cause) {
         if (!active || version !== revision.current) return
         setSession(null)
-        setError('No pudimos verificar tu sesión. Comprueba tu conexión y vuelve a intentarlo.')
+        setProfile(null)
+        setError(cause instanceof ApiError ? cause.message : 'No pudimos verificar tu sesión. Comprueba tu conexión y vuelve a intentarlo.')
       } finally {
         if (active && version === revision.current) setLoading(false)
       }
@@ -76,16 +90,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session?.expires_at) return
     const expires = session.expires_at * 1000
+    let timer: number
     const checkExpiry = () => {
-      if (Date.now() < expires) return
+      clearTimeout(timer)
+      if (Date.now() < expires) {
+        timer = window.setTimeout(checkExpiry, Math.min(2_147_483_647, expires - Date.now()))
+        return
+      }
       revision.current++
       setSession(null)
+      setProfile(null)
       setError('Tu sesión venció. Inicia sesión de nuevo.')
       // SDK normally refreshes before this point. Hide private UI immediately
       // if offline or refresh failed, then allow a successful refresh to restore it.
       void connection.client?.auth.refreshSession().catch(() => {})
     }
-    const timer = window.setTimeout(checkExpiry, Math.max(0, expires - Date.now()))
+    timer = window.setTimeout(checkExpiry, Math.min(2_147_483_647, Math.max(0, expires - Date.now())))
     window.addEventListener('focus', checkExpiry)
     return () => { clearTimeout(timer); window.removeEventListener('focus', checkExpiry) }
   }, [session, connection])
@@ -105,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     revision.current++
     setSession(null)
+    setProfile(null)
     setError('')
     try {
       const { error: signOutError } = await connection.client.auth.signOut({ scope: 'local' })
@@ -116,5 +137,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     }
   }
-  return <AuthContext.Provider value={{ session, loading, error, configurationError: connection.error, signIn, signOut, retry }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ session, profile, loading, error, configurationError: connection.error, signIn, signOut, retry }}>{children}</AuthContext.Provider>
 }

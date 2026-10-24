@@ -158,3 +158,21 @@ test('expiración durante el uso sin renovación válida oculta las rutas privad
   await expect(loginHeading(page)).toBeVisible()
   await expect(page.getByRole('navigation')).toHaveCount(0)
 })
+
+for (const status of [401, 403, 503]) {
+  test(`perfil API ${status} bloquea módulos con un mensaje claro`, async ({ page, context }) => {
+    await mockAuth(context, { profileStatus: status })
+    await page.goto('/')
+    await login(page)
+    await expect(page.getByRole('alert')).toContainText(status === 401 ? 'sesión ya no es válida' : status === 403 ? 'No tienes un perfil activo' : 'servicio de perfiles no está disponible')
+    await expect(page.getByRole('navigation')).toHaveCount(0)
+  })
+}
+
+test('perfil API de otra persona no concede acceso', async ({ page, context }) => {
+  await mockAuth(context, { profile: { id: '10000000-0000-0000-0000-000000000002', display_name: 'Otro usuario', role: 'admin', active: true } })
+  await page.goto('/')
+  await login(page)
+  await expect(page.getByRole('alert')).toContainText('sesión ya no es válida')
+  await expect(page.getByRole('navigation')).toHaveCount(0)
+})

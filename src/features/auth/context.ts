@@ -1,8 +1,10 @@
 import { createContext, useContext } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import type { StaffProfile } from '../../../shared/profile'
 
 export type AuthContextValue = {
   session: Session | null
+  profile: StaffProfile | null
   loading: boolean
   error: string
   configurationError: string

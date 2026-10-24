@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-10-23T19:09:21.741Z",
+  "api": "https://cai-market-api.brysof22.workers.dev",
+  "frontendUrl": "https://project-market.pages.dev",
+  "results": [
+    {
+      "name": "health",
+      "status": 200,
+      "expectedStatus": 200,
+      "contentType": "text/plain;charset=UTF-8",
+      "allowOrigin": null,
+      "cacheControl": null,
+      "passed": false
+    },
+    {
+      "name": "missing-token",
+      "status": 200,
+      "expectedStatus": 401,
+      "contentType": "text/plain;charset=UTF-8",
+      "allowOrigin": null,
+      "cacheControl": null,
+      "passed": false
+    },
+    {
+      "name": "invalid-token",
+      "status": 200,
+      "expectedStatus": 401,
+      "contentType": "text/plain;charset=UTF-8",
+      "allowOrigin": null,
+      "cacheControl": null,
+      "passed": false
+    },
+    {
+      "name": "allowed-preflight",
+      "status": 200,
+      "expectedStatus": 204,
+      "contentType": "text/plain;charset=UTF-8",
+      "allowOrigin": null,
+      "cacheControl": null,
+      "passed": false
+    },
+    {
+      "name": "rejected-origin",
+      "status": 200,
+      "expectedStatus": 403,
+      "contentType": "text/plain;charset=UTF-8",
+      "allowOrigin": null,
+      "cacheControl": null,
+      "passed": false
+    }
+  ],
+  "frontend": {
+    "status": 200,
+    "includesExpectedApiUrl": false,
+    "includesMeEndpoint": false
+  }
+}

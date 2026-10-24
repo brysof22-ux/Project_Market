@@ -4,6 +4,8 @@ La [propuesta técnica](PROPUESTA.md) contiene el ER actualizado, decisiones de 
 
 La [validación local](VALIDACION.md) registra las comprobaciones realizadas y sus límites.
 
+Actualización posterior: se añadió la migración independiente `20261023000500_current_profile_rpc.sql` para `/api/me`, sin editar las cuatro financieras. El fixture carga ahora las cinco migraciones y comprueba también la lectura del perfil propio. Ver [la API](../../worker/api/README.md) para permisos, validación y pasos pendientes de autorización; `pos` sigue fuera de Data API.
+
 ## Archivos generados
 
 - `supabase/migrations/20261023000100_pos_credit_prerequisites.sql`: base mínima para una instalación nueva, sin datos comerciales ficticios.
@@ -31,7 +33,7 @@ npm run lint
 npm run test:e2e
 ```
 
-`test:credit` carga las cuatro migraciones únicamente en PGlite en memoria y sustituye el reloj interno en el fixture. No usa `SUPABASE_URL`, una URL de producción, una cuenta Meta, un token ni un navegador. El reloj de producción utiliza el servidor, no una fecha enviada por React. Las credenciales de Supabase Auth se representan exclusivamente con una tabla fixture local de IDs.
+`test:credit` carga las migraciones disponibles únicamente en PGlite en memoria y sustituye el reloj interno en el fixture. No usa `SUPABASE_URL`, una URL de producción, una cuenta Meta, un token real ni un navegador. El reloj de producción utiliza el servidor, no una fecha enviada por React. Auth y su helper `auth.uid()` se representan mediante fixtures locales.
 
 El script limita la compilación paralela de WebAssembly y usa el compilador base de V8 solo para este proceso de pruebas. Esto reduce el pico de memoria; no cambia la configuración del frontend o del futuro Worker. La suite se detiene ante el primer fallo.
 

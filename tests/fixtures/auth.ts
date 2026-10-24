@@ -1,4 +1,5 @@
 import { test as base, expect, type BrowserContext } from '@playwright/test'
+import { businessFixture } from './business'
 export type { Page } from '@playwright/test'
 export { expect }
 
@@ -20,14 +21,26 @@ export function fakeSession(expiresIn = 3600) {
 }
 export async function mockAuth(context: BrowserContext, options: {
   passwordError?: boolean; userError?: boolean; refreshError?: boolean; logoutError?: boolean; expiresIn?: number
+  profileStatus?: number; profile?: unknown
 } = {}) {
   const calls: string[] = []
+  const business = businessFixture(context, authUser.id,
+    options.profile && typeof options.profile === 'object' && 'role' in options.profile ? String(options.profile.role) : 'admin')
+  await context.route('https://cai-api-test.invalid/**', async (route) => {
+    if (new URL(route.request().url()).pathname !== '/api/me') {
+      const response = await business(route.request().url(), { method:route.request().method(),headers:route.request().headers(),body:route.request().postData() })
+      return route.fulfill({ status:response.status,headers:Object.fromEntries(response.headers),body:await response.text() })
+    }
+    calls.push(`${route.request().method()} api/me`)
+    await route.fulfill({ status: options.profileStatus ?? 200, headers: { 'access-control-allow-origin': '*' },
+      json: options.profile ?? { id: authUser.id, display_name: 'Administrador de prueba', role: 'admin', active: true } })
+  })
   await context.route('https://cai-auth-test.supabase.co/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
     const endpoint = url.pathname.replace('/auth/v1/', '')
     calls.push(`${request.method()} ${endpoint}${url.search}`)
-    const headers = { 'access-control-allow-origin': '*', 'content-type': 'application/json', 'x-supabase-api-version': '2024-01-01' }
+    const headers = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'X-Supabase-Api-Version', 'content-type': 'application/json', 'x-supabase-api-version': '2024-01-01' }
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
     if (endpoint === 'token') {
       const refresh = url.searchParams.get('grant_type') === 'refresh_token'

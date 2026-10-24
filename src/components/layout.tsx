@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  FlaskConical,
   LogOut,
   Menu,
   Moon,
@@ -15,7 +14,6 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from './ui/button'
-import { usePayments } from '../features/payments/use-payments'
 import { navigation, type PageId } from '../data/navigation'
 import { useAuth } from '../features/auth/context'
 
@@ -30,14 +28,13 @@ export function Layout({
   toggleTheme: () => void
   children: ReactNode
 }) {
-  const { actor } = usePayments()
-  const { session, signOut } = useAuth()
+  const { session, profile, signOut } = useAuth()
   const identity = session?.user.email ?? 'Usuario autenticado'
   const roleLabel = {
     admin: 'Administrador',
     supervisor: 'Supervisor',
     cashier: 'Cajero',
-  }[actor.role]
+  }[profile?.role ?? 'cashier']
   const [mobileOpen, setMobileOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [popover, setPopover] = useState<
@@ -109,23 +106,23 @@ export function Layout({
             <strong>Mi tienda</strong>
             <small>Sede principal</small>
           </div>
-          <span className="store-dot" title="Entorno de demostración" />
+          <span className="store-dot" title="Sesión autenticada" />
         </div>
         <p className="nav-label">PRINCIPAL</p>
         <nav aria-label="Navegación principal">
-          {navigation.map((item, i) => (
+          {navigation.filter((item) => (item.id !== 'configuracion' || profile?.role === 'admin')
+            && (!['proveedores','auditoria'].includes(item.id) || profile?.role !== 'cashier')).map((item) => (
             <a
               key={item.id}
               href={`#/${item.id}`}
               aria-label={item.label}
               aria-current={page === item.id ? 'page' : undefined}
-              className={`nav-item ${page === item.id ? 'active' : ''} ${i === 7 ? 'nav-settings' : ''}`}
+              className={`nav-item ${page === item.id ? 'active' : ''} ${item.id === 'configuracion' ? 'nav-settings' : ''}`}
               onClick={() => setMobileOpen(false)}
             >
               <item.icon size={19} strokeWidth={1.7} />
               <span>{item.label}</span>
               {page === item.id && <span className="active-dot" />}
-              {item.id === 'inventario' && <span className="nav-count">3</span>}
             </a>
           ))}
         </nav>
@@ -152,7 +149,7 @@ export function Layout({
           <div className="sidebar-footer">
             <span className="mini-brand">cai</span>
             <span>Hecho para tu negocio.</span>
-            <small>v0.1</small>
+            <small>v1.0</small>
           </div>
         </div>
       </aside>
@@ -261,35 +258,33 @@ export function Layout({
             </Button>
             <h3>
               {popover === 'notifications'
-                ? 'Notificaciones de muestra'
+                ? 'Notificaciones'
                 : popover === 'profile'
                   ? 'Mi cuenta'
                   : 'Centro de ayuda'}
             </h3>
             <p>
               {popover === 'notifications'
-                ? '3 productos están por debajo de su stock mínimo. Revisa el inventario para conocer el detalle.'
+                ? 'Revisa el inventario con el filtro de stock bajo para consultar las alertas actuales.'
                 : popover === 'profile'
-                  ? `${identity}. Acceso con Supabase Auth. Los pagos y el rol ${roleLabel} del simulador siguen siendo de demostración.`
-                  : 'Explora los módulos desde el menú. Los datos son ficticios y las acciones de demostración no afectan una tienda real.'}
+                  ? `${identity}. Acceso con Supabase Auth. Rol: ${roleLabel}.`
+                  : 'Gestiona productos, ventas, cartera y caja desde el menú. Las operaciones confirmadas se registran en la tienda.'}
             </p>
             {popover === 'profile' && <Button variant="outline" className="mt-3" onClick={() => void signOut()}><LogOut size={16} />Cerrar sesión</Button>}
           </div>
         )}
         <main id="main" tabIndex={-1}>
           <div className="demo-strip">
-            <FlaskConical size={13} />
-            <span>Espacio de demostración</span>
+            <span>Control operativo</span>
             <span className="demo-separator">·</span>
-            <span>Datos simulados</span>
-            <span className="demo-date">23 de octubre de 2026</span>
+            <span>Datos registrados en la tienda</span>
           </div>
           {children}
           <footer className="main-footer">
             <span>© 2026 CAI Market</span>
             <span>
               Una visión clara de tu negocio.
-              <span className="footer-dot">●</span> Entorno de demostración
+              <span className="footer-dot">●</span> Gestión comercial
             </span>
           </footer>
         </main>

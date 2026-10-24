@@ -1,91 +1,52 @@
-# CAI Market · Panel administrativo
+# CAI Market 1.0
 
-La interfaz de transferencias con QR fijos y su historial local de prueba se documentan en [docs/transferencias](docs/transferencias/README.md).
+Implementación local de gestión comercial con React, TypeScript, Supabase Auth/PostgreSQL y Cloudflare Workers/Pages. **Pendiente de revisión y validación alojada; no se declara lista para producción.** No se ejecutaron migraciones remotas, commits ni despliegues.
 
-La ampliación de arquitectura y migraciones de **Créditos y cuentas por cobrar** está en [docs/creditos](docs/creditos/README.md). Incluye SQL propuesto y pruebas locales aisladas (`npm run test:credit`, `npm run check:credit`); no se aplicó a Supabase ni se conectó a la interfaz. El transporte de WhatsApp es únicamente mock.
+- [Auditoría inicial](docs/AUDITORIA_V1.md).
+- [Entrega, funciones, límites, migraciones y lista de producción](docs/ENTREGA_V1.md).
+- [Diagnóstico aislado del TypeError de workerd](worker/auth-diagnostic/README.md).
+- [Estado y recuperación de la migración 005](docs/integracion/MIGRACION_005.md).
 
-Primera versión visual del sistema de gestión de una tienda física. Interfaz en español, responsive, con tema claro y oscuro. **Todos los registros, indicadores y comparaciones son ficticios.** No tiene backend conectado, autenticación real ni pagos bancarios; IndexedDB conserva únicamente la configuración y el historial de demostración del navegador.
+## Funciones locales
 
-## Ejecutar
+Login/logout y perfiles reales; catálogo persistente con entradas/salidas auditadas; clientes/proveedores; POS transaccional y pagos múltiples; crédito/abonos; apertura, gastos, arqueo y cierre de caja; devoluciones completas por compensación; reportes/dashboard desde PostgreSQL; perfiles/permisos y configuración persistente. Tema claro/oscuro, navegación hash y pantallas adaptables.
 
-Requiere una versión de Node.js compatible con Vite 8 y npm.
+La interfaz comercial utiliza Worker y RPCs públicas controladas; no lee tablas privadas ni usa mocks como fuente operativa. Se mantienen componentes QR legados exclusivamente para regresión en un harness de pruebas, fuera de las rutas comerciales y del bundle de producción. Pagos bancarios son registros de confirmación manual, no verificaciones de banco. Contabilidad operativa, no fiscal.
 
-```sh
+## Configuración local
+
+Requiere Node compatible con Vite 8, npm y dependencias del lockfile existente.
+
+En `.env.local`: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL`. En `worker/api/.dev.vars`: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ALLOWED_ORIGIN` exacto. Utilizar URL y publishable del mismo proyecto. No almacenar contraseñas, service_role ni claves secretas en frontend o Git. Reiniciar servidores al cambiar valores. No sobrescribir archivos locales existentes.
+
+```powershell
 npm ci
+npm run dev:api
+# En otra terminal, después de apuntar VITE_API_URL al Worker local:
 npm run dev
 ```
 
-Abrir la URL que indica Vite. La navegación utiliza rutas hash (`/#/inventario`), por lo que admite enlaces directos y los botones atrás/adelante del navegador sin configurar un servidor de rutas.
+La app usa rutas como `/#/inventario`. El acceso sigue bloqueado si Auth, perfil o RPC no están disponibles; no hay fallback de permisos. Las cuentas Auth deben existir y tener un perfil activo; el primer administrador se provisiona por un procedimiento autorizado, nunca desde una petición pública.
 
-```sh
-npm run build       # TypeScript y compilación de producción
-npm run lint        # Oxlint
-npx playwright install chromium
-npm run test:e2e    # Pruebas de interfaz con Chromium
-npm run preview    # Vista previa del build
+El esquema `pos` debe permanecer fuera de Data API. Revisar/aplicar únicamente migraciones pendientes; 001–004 no se reejecutan. El estado remoto de 005 no se comprobó en esta tarea. Las nuevas 006–008 están propuestas localmente; ver la guía de entrega antes de autorizar su aplicación.
+
+## Verificación
+
+```powershell
+npm run check:api
+npm run check:credit
+npm run test:api
+npm run test:credit
+npm run lint
+npm run check:frontend-config
+npm run build
+npm run test:e2e -- --workers=1 --max-failures=1
 ```
 
-## Alcance de la interfaz
+Las pruebas de comercio en navegador usan UI → Worker → SQL/PGlite y un límite Auth simulado, sin cuentas reales. Las pruebas SQL verifican roles, RLS, stock, idempotencia, crédito, caja y compensaciones. No sustituyen la concurrencia de dos conexiones PostgreSQL ni el recorrido alojado con JWT real. No lanzar dos suites de navegador simultáneamente: comparten puerto y artefactos.
 
-| Módulo         | Comportamiento de esta versión                                                                                                                                         |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard      | Indicadores de hoy/ayer, gráficas con tooltips y cambio semana/mes, ventas de ejemplo, detalle en diálogo y alertas de stock.                                          |
-| Punto de venta | Carrito temporal, QR fijos configurables, confirmación manual de transferencia y pagos mixtos. Guarda ventas/pagos solo en el historial local de demostración; no cobra ni descuenta existencias. |
-| Inventario     | Ocho productos de muestra, búsqueda por nombre/código, categorías y filtro de stock bajo. Solo consulta.                                                               |
-| Estadísticas   | Series y distribución de categorías ficticias. Los totales y el crecimiento de la gráfica se calculan desde sus series.                                                |
-| Contabilidad   | Resumen ilustrativo, filtro de las cinco ventas de muestra e historial separado de pagos locales, con efectivo, transferencias y tarjeta diferenciados. No es un libro contable. |
-| Clientes       | Directorio ficticio con búsqueda local.                                                                                                                                |
-| Proveedores    | Directorio ficticio con búsqueda local.                                                                                                                                |
-| Configuración  | Formulario general con validación sin guardar, tema, selector de roles demo y administración local de QR con PNG/JPG/WebP, vista previa, cambios y activación. |
+## Preparación de publicación
 
-La búsqueda superior localiza módulos; `Ctrl+K` o `Cmd+K` enfoca el buscador en escritorio. El menú móvil se cierra al navegar o al pulsar Escape. Las notificaciones, el perfil y la ayuda muestran información de demostración. Los diálogos administran el foco y admiten Escape mediante Radix UI.
+Confirmar proyecto, backup, versiones aplicadas, ACL y datos existentes. Probar en staging operaciones concurrentes, fallos parciales y permisos. Autorizar migraciones/despliegues por separado; verificar Worker, después reconstruir Pages con variables reales y revisar CSP/CORS. Las instrucciones y el checklist completos están en [ENTREGA_V1.md](docs/ENTREGA_V1.md).
 
-La exportación genera **un CSV con las cinco ventas ficticias del 23 de octubre de 2026**, independientemente del período elegido para los indicadores. El diálogo indica expresamente ese alcance. No exporta operaciones reales ni un reporte contable.
-
-## Arquitectura y archivos
-
-```text
-src/
-  App.tsx                   Rutas hash, carga de vistas y tema
-  index.css                 Tailwind, tokens, componentes y responsive
-  components/
-    layout.tsx              Sidebar, barra superior y búsqueda global
-    common.tsx              Panel, indicadores, badges y encabezados
-    charts.tsx              Gráficas de Recharts
-    sales-table.tsx         Tabla reutilizable y detalle de venta
-    ui/button.tsx           Patrón Button de shadcn/ui
-    ui/dialog.tsx           Composición Dialog de shadcn/ui con Radix
-  data/
-    mock.ts                 Datos ficticios tipados
-    navigation.ts           Definición central de los ocho módulos
-  features/
-    dashboard.tsx           Dashboard y exportación de ejemplo
-    inventory.tsx           Consulta y filtros de inventario
-    pos.tsx                 Carrito de demostración
-    modules.tsx             Estadísticas, contabilidad, directorios y ajustes
-  lib/utils.ts              Clases y formato monetario COP
-tests/admin.spec.ts         Recorridos de interfaz
-playwright.config.ts        Chromium y servidor local para pruebas
-```
-
-Se sustituyó la pantalla inicial de Vite y se eliminó `src/App.css`. Se actualizaron `index.html` (idioma y título), `vite.config.ts` (Tailwind y alias), `tsconfig.app.json` (alias), `package.json`/`package-lock.json` (dependencias y pruebas), `.gitignore` y este documento. `components.json` configura shadcn/ui y `.prettierrc.json` define el formato del código. Las vistas se cargan bajo demanda.
-
-Tecnologías: React, TypeScript, Vite, Tailwind CSS, componentes locales basados en los patrones de shadcn/ui, Radix Dialog/Slot, Lucide React y Recharts. Integración de Tailwind conforme a su [documentación de Vite](https://tailwindcss.com/docs/installation/using-vite); componentes de referencia en [shadcn/ui](https://ui.shadcn.com/docs/components).
-
-## Datos y persistencia
-
-- Datos de demostración centralizados en `src/data/mock.ts`; correos bajo `example.com`.
-- Carrito, filtros y formulario general viven en memoria y se descartan al salir del módulo o recargar.
-- Los QR, sus metadatos, cambios y ventas/pagos locales de demostración se guardan en IndexedDB. El rol de demostración se guarda en `sessionStorage`; no representa autenticación real.
-- Únicamente el tema se guarda en `localStorage`, bajo `cai-market:theme:v1`. La interfaz tolera el bloqueo del almacenamiento.
-- El dashboard conserva fechas fijas de demostración: 23 de octubre de 2026 y su día anterior. El historial local de pagos registra el reloj del navegador, sin representar una conexión a operaciones en vivo.
-- Las cinco filas de ventas son una muestra; no representan el total diario de 68 transacciones ficticias indicado en el dashboard.
-- No se solicitan contraseñas ni tokens. Usar únicamente datos de prueba al cargar QR o referencias en este prototipo.
-
-## Pruebas y revisión
-
-La suite visual conserva las ocho pruebas originales de navegación, inventario, carrito, reportes, formularios, temas y responsive, y añade trece pruebas de transferencias: modal, QR/importe, referencia y declaración manual, cancelación, pagos mixtos, cargas/reemplazos, persistencia, permisos demo, desactivación, cambios entre pestañas, doble clic y móvil. Las capturas quedan en `test-results/`, excluido del control de versiones. Ejecutar con `--workers=1` en equipos con memoria limitada.
-
-## Pendiente
-
-Cloudflare Workers/TypeScript y Supabase PostgreSQL/Auth/Storage; autorización real por roles; almacenamiento compartido de QR; movimientos de inventario; conexión de créditos; transacciones y pagos reales; facturación; gastos, impuestos, cierres y conciliación; métricas desde operaciones reales. La demostración actual no verifica estos procesos. La suite utiliza Chromium; otros navegadores y dispositivos físicos requieren una validación posterior.
+Límites deliberados: devoluciones completas, ajustes/gastos de efectivo y administración de perfiles de cuentas Auth existentes. No incluye impuestos/facturación fiscal, devoluciones parciales, conciliación bancaria, invitaciones Auth desde UI, venta offline, WhatsApp real ni QR compartidos en R2. No importar historial local de demostración como operaciones reales.

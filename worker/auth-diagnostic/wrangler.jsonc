@@ -1,0 +1,7 @@
+{
+  "name": "cai-market-auth-diagnostic",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": false,
+  "preview_urls": false
+}

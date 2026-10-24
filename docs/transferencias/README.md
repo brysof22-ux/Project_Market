@@ -1,6 +1,6 @@
 # Transferencias con imágenes QR fijas
 
-Implementación de interfaz y repositorio **local de demostración**. No se configuraron servicios remotos, claves bancarias ni Supabase, no se ejecutaron migraciones y no se verifica ningún banco. La confirmación manual es una declaración del usuario en una simulación, nunca evidencia de conciliación bancaria.
+Implementación de interfaz y repositorio **local de demostración**. El acceso a la aplicación utiliza Supabase Auth real (ver README principal), pero los QR y pagos continúan locales: no se conectaron servicios bancarios, Storage o PostgreSQL para transferencias ni se ejecutaron migraciones en esta integración. La confirmación manual es una declaración del usuario en una simulación, nunca evidencia de conciliación bancaria.
 
 ## Recorrido de uso
 
@@ -32,7 +32,7 @@ Base IndexedDB: `cai-market-payments-demo-v1`, del mismo origen del frontend.
 
 Las imágenes anteriores se conservan para sostener el historial de versiones; una edición no sobrescribe las usadas previamente. Al borrar los datos del sitio se pierde la demostración. No se presenta IndexedDB como una bóveda de datos bancarios ni como almacenamiento de producción.
 
-**Configuración → Usuarios y permisos → Rol de demostración** permite ensayar administrador, supervisor y cajero. Solo administrador puede editar QR; también hay una comprobación en el repositorio local. El perfil permanece durante la sesión del navegador y la barra superior refleja el usuario correspondiente. Este selector no autentica a nadie: cualquier permiso real debe verificarse en el backend. No usar el prototipo con datos sensibles ni para autorizar cobros reales.
+**Configuración → Usuarios y permisos → Rol de demostración** permite ensayar administrador, supervisor y cajero para el simulador de QR. Solo administrador demo puede editar QR; también hay una comprobación en el repositorio local. Ese rol permanece durante la sesión del navegador; la barra superior muestra el correo de la cuenta real de Supabase Auth. El selector no cambia la cuenta ni sus permisos reales: el Worker deberá verificar el perfil/rol privado antes de autorizar operaciones remotas. No usar el simulador para autorizar cobros reales.
 
 Si IndexedDB no está disponible o falla al guardar, se muestra el error y no se indica que la venta fue guardada. Los errores de QR bloquean la confirmación manual. Las pestañas notifican cambios mediante BroadcastChannel y el repositorio vuelve a validar la revisión dentro de la transacción de escritura.
 

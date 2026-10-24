@@ -330,11 +330,19 @@ test('una conexión SQL no puede fabricar identidad configurando request.jwt.cla
 test('propiedad, RLS y SECURITY DEFINER conservan privilegios mínimos', async () => {
   const unsafe = await scalar(db, `SELECT count(*) AS value FROM pg_proc p
     JOIN pg_namespace n ON n.oid=p.pronamespace
-    WHERE n.nspname='pos' AND (pg_get_userbyid(p.proowner)<>'pos_owner'
+    WHERE n.nspname='pos' AND p.oid<>'pos.current_profile_auth_uid()'::regprocedure
+      AND (pg_get_userbyid(p.proowner)<>'pos_owner'
       OR (p.prosecdef AND NOT ('search_path=pg_catalog, pos, pg_temp'=ANY(p.proconfig)))
       OR has_function_privilege('anon',p.oid,'EXECUTE')
       OR has_function_privilege('service_role',p.oid,'EXECUTE'))`)
   expect(Number(unsafe)).toBe(0)
+  // The sole bridge exception has a stricter path and a distinct trusted owner.
+  expect(await scalar(db, `SELECT pg_get_userbyid(proowner)='credit_migrator'
+    AND prosecdef AND provolatile='s' AND proconfig=ARRAY['search_path=pg_catalog, pg_temp']
+    AND NOT has_function_privilege('anon',oid,'EXECUTE')
+    AND NOT has_function_privilege('authenticated',oid,'EXECUTE')
+    AND NOT has_function_privilege('service_role',oid,'EXECUTE') AS value
+    FROM pg_proc WHERE oid='pos.current_profile_auth_uid()'::regprocedure`)).toBe(true)
   expect(Number(await scalar(db, `SELECT count(*) AS value FROM pg_tables
     WHERE schemaname='pos' AND (tableowner<>'pos_owner' OR NOT rowsecurity)`))).toBe(0)
   for (const role of ['pos_app', 'pos_scheduler', 'authenticated']) {

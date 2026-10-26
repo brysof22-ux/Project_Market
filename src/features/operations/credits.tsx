@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { EmptyState, PageHeading, Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
 import { QueryState, Pagination } from '../catalog/common'
 import { useOperationsMutation, useOperationsQuery, useSearch } from '../catalog/hooks'
+import { TransferPicker } from '../payments/transfer-qr'
 import { money } from '../../lib/utils'
 import type { Bootstrap, DebtDetail, DebtPage } from '../../../shared/operations'
 
@@ -43,6 +44,16 @@ function DebtHistory({ chargeId, onChanged }: { chargeId: string; onChanged: () 
   const bootstrap = useOperationsQuery<Bootstrap>('bootstrap', {})
   const mutation = useOperationsMutation()
   const [notice, setNotice] = useState('')
+  const [methodId, setMethodId] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const [qrReady, setQRReady] = useState(false)
+  const selectQR = useCallback(() => setConfirmed(false), [])
+  const readyQR = useCallback((ready: boolean) => { setQRReady(ready); if (!ready) setConfirmed(false) }, [])
+  const methods = bootstrap.data?.methods.filter((method) => method.code !== 'card') ?? []
+  const selectedMethod = methods.find((method) => method.id === methodId) ?? methods.find((method) => method.code === 'cash') ?? methods[0]
+  const transfer = selectedMethod?.code === 'transfer'
+  const canSubmit = confirmed && !!selectedMethod && (!transfer || qrReady)
+
   const debt = detail.data
   return <Panel><SectionTitle title="Detalle e historial de pagos" /><QueryState {...detail} retry={detail.refresh} />
     {debt && <><p><strong>{debt.name}</strong> · {debt.phone}</p><p>Compra: {debt.purchased_on} · {debt.due_on ? `Vence: ${debt.due_on}` : 'Sin vencimiento'}</p>
@@ -54,19 +65,23 @@ function DebtHistory({ chargeId, onChanged }: { chargeId: string; onChanged: () 
       {Number(debt.outstanding) > 0 && <><QueryState {...bootstrap} retry={bootstrap.refresh} />
         {bootstrap.data?.session ? <form className="settings-form" onSubmit={async (event) => {
           event.preventDefault()
+          if (!canSubmit) return
           const form = event.currentTarget
           const values = new FormData(form)
           if (await mutation.run('debt.receipt', { charge_id: chargeId, session_id: bootstrap.data?.session?.id,
-            amount: values.get('amount'), method_id: values.get('method_id'), reference: values.get('reference') || null })) {
-            form.reset(); setNotice('Abono registrado en esta compra.'); detail.refresh(); bootstrap.refresh(); onChanged()
+            amount: values.get('amount'), method_id: selectedMethod?.id })) {
+            form.reset(); setMethodId(''); setConfirmed(false); setQRReady(false); setNotice('Abono registrado en esta compra.'); detail.refresh(); bootstrap.refresh(); onChanged()
           }
+        }} onChange={(event) => {
+          if (!(event.target instanceof Element) || event.target.getAttribute('name') !== 'confirm_receipt') setConfirmed(false)
         }}><fieldset disabled={mutation.busy} className="business-fieldset">
           <p>El abono se aplica exclusivamente a esta compra, sin mezclar otras deudas de la persona.</p>
           <label className="form-label">Valor del abono<input name="amount" type="number" required min="0.01" max={debt.outstanding} step="0.01" /></label>
-          <label className="form-label">Método<select name="method_id" required>{bootstrap.data.methods.filter((method) => method.code !== 'card').map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
+          <label className="form-label">Método<select name="method_id" required value={selectedMethod?.id ?? ''} onChange={(event) => { setMethodId(event.target.value); setConfirmed(false); setQRReady(false) }}>{methods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
+          {transfer && <TransferPicker onSelect={selectQR} onReady={readyQR} />}
           <p className="muted">Verifica manualmente la recepción de las transferencias antes de registrar el abono.</p>
-          <label className="checkbox-label"><input type="checkbox" required />Confirmo el valor recibido.</label>
-        </fieldset>{mutation.error && <p role="alert">{mutation.error}</p>}<Button type="submit" disabled={mutation.busy}>{mutation.busy ? 'Registrando…' : 'Registrar abono recibido'}</Button></form>
+          <label className="checkbox-label"><input name="confirm_receipt" type="checkbox" required checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confirmo el valor recibido.</label>
+        </fieldset>{mutation.error && <p role="alert">{mutation.error}</p>}<Button type="submit" disabled={mutation.busy || !canSubmit}>{mutation.busy ? 'Registrando…' : 'Registrar abono recibido'}</Button></form>
           : bootstrap.data && <p>Abre tu propia caja desde <a href="#/pos">Punto de venta</a> para registrar abonos.</p>}
       </>}
     </>}

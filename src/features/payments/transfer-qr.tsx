@@ -1,11 +1,52 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TransferQR } from '../../../shared/catalog'
 import { api } from '../../lib/api'
-import { useCatalogQuery } from '../catalog/hooks'
 import { QueryState } from '../catalog/common'
 import { Panel, SectionTitle } from '../../components/common'
 import { Dialog } from '../../components/ui/dialog'
 import { Button } from '../../components/ui/button'
+
+const qrChanged = 'cai-market:transfer-qr-changed'
+function useTransferQRs() {
+  const [state, setState] = useState<{ data: TransferQR[] | null; loading: boolean; error: string }>({ data: null, loading: true, error: '' })
+  const refreshRef = useRef<() => void>(() => {})
+  const refresh = useCallback(() => refreshRef.current(), [])
+  useEffect(() => {
+    let disposed = false
+    let controller: AbortController | null = null
+    const load = () => {
+      controller?.abort()
+      controller = new AbortController()
+      const signal = controller.signal
+      void api.catalog<TransferQR[]>('qr.list', {}, undefined, signal).then((data) => {
+        if (disposed || signal.aborted) return
+        setState((current) => JSON.stringify(current.data) === JSON.stringify(data) && !current.error && !current.loading
+          ? current : { data, loading: false, error: '' })
+      }).catch(() => {
+        if (!disposed && !signal.aborted) setState({ data: null, loading: false, error: 'No se pudieron actualizar los QR. Reintenta antes de confirmar el pago.' })
+      })
+    }
+    refreshRef.current = load
+    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(qrChanged) : null
+    if (channel) channel.onmessage = load
+    window.addEventListener(qrChanged, load)
+    window.addEventListener('focus', load)
+    const timer = window.setInterval(load, 30_000)
+    load()
+    return () => {
+      disposed = true; controller?.abort(); channel?.close(); window.clearInterval(timer)
+      window.removeEventListener(qrChanged, load); window.removeEventListener('focus', load)
+    }
+  }, [])
+  return { ...state, refresh }
+}
+function notifyQRChange() {
+  window.dispatchEvent(new Event(qrChanged))
+  if (typeof BroadcastChannel !== 'undefined') {
+    const channel = new BroadcastChannel(qrChanged)
+    channel.postMessage('refresh'); channel.close()
+  }
+}
 
 export function RemoteQR({ method, onReady }: { method: TransferQR; onReady?: (ready: boolean) => void }) {
   const [expanded, setExpanded] = useState(false)
@@ -26,10 +67,10 @@ export function RemoteQR({ method, onReady }: { method: TransferQR; onReady?: (r
   return <div className="transfer-qr-image">{url && <img src={url} alt={`Código QR ${method.name}`} onLoad={() => onReady?.(true)} onError={() => { onReady?.(false); setError('Imagen QR no válida.') }} />}{url && <Button type="button" variant="outline" onClick={() => setExpanded(true)}>Ampliar QR {method.name}</Button>}{expanded && url && <Dialog open onOpenChange={setExpanded} title={`QR ${method.name}`} description="Comprueba el destinatario y el importe antes de transferir."><img className="transfer-qr-expanded" src={url} alt={`QR ampliado ${method.name}`} /></Dialog>}{error && <p role="alert">{error}</p>}</div>
 }
 export function TransferPicker({ onSelect, onReady }: { onSelect: (method: TransferQR | null) => void; onReady: (ready: boolean) => void }) {
-  const query = useCatalogQuery<TransferQR[]>('qr.list', {})
+  const query = useTransferQRs()
   const [code, setCode] = useState('nequi')
   const method = query.data?.find((row) => row.code === code)
-  useEffect(() => { onSelect(method ?? null) }, [method, onSelect])
+  useEffect(() => { onSelect(method ?? null); if (!method?.image_id) onReady(false) }, [method, onSelect, onReady])
   return <section className="transfer-qr-panel" aria-label="Pago por transferencia">
     <SectionTitle title="Transferencia" subtitle="Elige el QR que el cliente desea escanear." />
     <QueryState {...query} retry={query.refresh} />
@@ -37,11 +78,11 @@ export function TransferPicker({ onSelect, onReady }: { onSelect: (method: Trans
       <option value="nequi">Nequi</option><option value="breb">Llaves Bre-B</option>
     </select></label>
     {method && <RemoteQR key={`${method.code}:${method.image_id}`} method={method} onReady={onReady} />}
-    <Button type="button" variant="outline" onClick={() => { onReady(false); query.refresh() }}>Actualizar QR</Button>
-    <p className="muted">El cliente debe comprobar el destinatario y el importe. Escanear el QR no registra el pago. Verifica que el dinero haya sido recibido antes de confirmar la venta.</p>
+    <Button type="button" variant="outline" onClick={query.refresh}>Actualizar QR</Button>
+    <p className="muted">El cliente debe comprobar el destinatario y el importe. Escanear el QR no registra el pago. Verifica que el dinero haya sido recibido antes de confirmar el pago.</p>
   </section>
 }
-function QREditor({ method, refresh }: { method: TransferQR; refresh: () => void }) {
+function QREditor({ method }: { method: TransferQR }) {
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -53,7 +94,7 @@ function QREditor({ method, refresh }: { method: TransferQR; refresh: () => void
       setBusy(true); setError(''); setNotice('')
       try {
         await api.uploadTransferQRImage(method.code, file, method.image_id)
-        setFile(null); setNotice('QR actualizado.'); form.reset(); refresh()
+        setFile(null); setNotice('QR actualizado.'); form.reset(); notifyQRChange()
       } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo actualizar el QR.') }
       finally { setBusy(false) }
     }}>
@@ -77,8 +118,8 @@ function QREditor({ method, refresh }: { method: TransferQR; refresh: () => void
   </Panel>
 }
 export function TransferSettings() {
-  const query = useCatalogQuery<TransferQR[]>('qr.list', {})
+  const query = useTransferQRs()
   return <section aria-label="Métodos de pago"><SectionTitle title="Métodos de pago" subtitle="Códigos QR de transferencia. Solo los administradores pueden reemplazarlos." />
-    <QueryState {...query} retry={query.refresh} /><div className="settings-grid">{query.data?.map((method) => <QREditor key={method.code} method={method} refresh={query.refresh} />)}</div>
+    <QueryState {...query} retry={query.refresh} /><div className="settings-grid">{query.data?.map((method) => <QREditor key={method.code} method={method} />)}</div>
   </section>
 }

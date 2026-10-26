@@ -37,3 +37,15 @@ Las pruebas integradas de navegador usan Worker real y SQL en PGlite con el lím
 - Worker publicado: versión `686e77c2-a7c8-4512-832a-1f3dc301ff69`.
 - Línea base financiera: ventas, pagos, créditos/abonos, caja, perfiles, períodos y stock coinciden antes/después. Durante la ejecución el catálogo pasó de 4 a 8 productos; la auditoría registra `product.save` y `product.image_attached` concurrentes. La migración no crea productos.
 - URL Pages: https://project-market.pages.dev. Worker: https://cai-market-api.brysof22.workers.dev.
+
+## Corrección: QR en abonos de deudas (26/10/2026)
+
+`Deudas → Detalle e historial de pagos → Registrar abono` reutiliza `TransferPicker`, el mismo componente de ventas. Transferencia muestra Nequi/Llaves Bre-B y sus imágenes autenticadas de R2; efectivo oculta el selector. Cambiar método o QR conserva el importe y exige confirmar nuevamente «Confirmo el valor recibido». El envío permanece deshabilitado hasta la confirmación y, para transferencia, hasta que el QR se cargue correctamente. No se envía una referencia bancaria.
+
+La consulta compartida de configuración mantiene sus datos cuando no hay cambios, escucha cambios del administrador entre pestañas y actualiza al recuperar el foco o cada 30 segundos para otros dispositivos. Un QR reemplazado invalida la confirmación anterior. El botón Actualizar QR sigue disponible; actualizar una versión sin cambios no bloquea el formulario. Los cambios de imagen no reinician el importe escrito.
+
+No requiere cambios de Worker, Supabase, R2 ni migraciones. Mantiene `debt.receipt`, la deuda seleccionada, el límite del saldo y la clave de idempotencia existente; no modifica saldos ni registros históricos en producción. La publicación se realiza por `main` y la integración GitHub → Cloudflare Pages.
+
+Las pruebas nuevas recorren administrador/cajero con dos compras de una misma persona, ambos QR, efectivo, importe conservado, confirmación, transferencia sin referencia, abono dirigido, rechazo de sobrepago, repetición idempotente y caja sin entradas de efectivo por transferencia. También verifican el reemplazo desde otra pestaña y la reutilización en ventas. Las imágenes de prueba siguen siendo ficticias; no se generan ni reemplazan QR bancarios durante los ensayos.
+
+Validación de esta corrección: 17 pruebas Playwright de navegador (ventas, abonos, roles, caja, inventario, reportes y administración QR), 48 SQL de regresión y 2 API de seguridad de imágenes aprobadas. TypeScript, lint y compilación correctos. No se ejecutan pruebas comerciales contra saldos reales.

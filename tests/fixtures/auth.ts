@@ -15,7 +15,8 @@ export function fakeSession(expiresIn = 3600) {
   const exp = Math.floor(Date.now() / 1000) + expiresIn
   const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
   return {
-    access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: authUser.id, aud: 'authenticated', role: 'authenticated', exp })}.fake_signature`,
+    access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: authUser.id, aud: 'authenticated', role: 'authenticated', exp,
+      session_id: '90000000-0000-4000-8000-000000000001', amr: [{ method: 'password', timestamp: Math.floor(Date.now() / 1000) }] })}.fake_signature`,
     refresh_token: 'fake-refresh-token', token_type: 'bearer', expires_in: expiresIn, expires_at: exp, user: authUser,
   }
 }
@@ -28,8 +29,13 @@ export async function mockAuth(context: BrowserContext, options: {
     options.profile && typeof options.profile === 'object' && 'role' in options.profile ? String(options.profile.role) : 'admin')
   await context.route('https://cai-api-test.invalid/**', async (route) => {
     if (new URL(route.request().url()).pathname !== '/api/me') {
-      const response = await business(route.request().url(), { method:route.request().method(),headers:route.request().headers(),body:route.request().postData() })
-      return route.fulfill({ status:response.status,headers:Object.fromEntries(response.headers),body:await response.text() })
+      const binary = new URL(route.request().url()).pathname.endsWith('/image')
+      const raw = route.request().postDataBuffer()
+      const body = binary && raw ? new Uint8Array(raw).buffer : route.request().postData()
+      const response = await business(route.request().url(), { method:route.request().method(),headers:route.request().headers(),body })
+      const responseBody = response.headers.get('Content-Type')?.startsWith('image/')
+        ? Buffer.from(await response.arrayBuffer()) : await response.text()
+      return route.fulfill({ status:response.status,headers:Object.fromEntries(response.headers),body:responseBody })
     }
     calls.push(`${route.request().method()} api/me`)
     await route.fulfill({ status: options.profileStatus ?? 200, headers: { 'access-control-allow-origin': '*' },

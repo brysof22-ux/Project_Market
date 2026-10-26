@@ -1,0 +1,8 @@
+﻿{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "cai-market-maintenance-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": false,
+  "vars": {}
+}

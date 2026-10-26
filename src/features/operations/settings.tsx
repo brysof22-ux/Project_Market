@@ -6,21 +6,23 @@ import { useOperationsMutation, useOperationsQuery } from '../catalog/hooks'
 import { QueryState } from '../catalog/common'
 import { OperationForm } from './forms'
 import type { Bootstrap, StaffAccount, AuditEvent } from '../../../shared/operations'
+import { ResetOperation } from './reset'
+import { PeriodHistory } from './period-history'
 
 function UserForm({ user, done }: { user: StaffAccount | null; done: () => void }) {
   const mutation = useOperationsMutation()
   return <form className="settings-form" onSubmit={async (event) => {
     event.preventDefault()
     const values = Object.fromEntries(new FormData(event.currentTarget))
-    if (await mutation.run('user.save', { ...values, active: values.active === 'on', can_credit: values.can_credit === 'on', can_expenses: values.can_expenses === 'on' })) done()
+    if (await mutation.run('user.save', { ...values, active: values.active === 'on', can_credit: true, can_expenses: values.role === 'admin' })) done()
   }}>
     <p className="muted">El usuario debe existir en Supabase Auth. Aquí se administra su perfil de tienda; no se reciben contraseñas ni claves administrativas.</p>
     <label className="form-label">ID del usuario Auth<input name="id" required readOnly={!!user} defaultValue={user?.id} pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" /></label>
     <label className="form-label">Nombre visible<input name="display_name" required maxLength={100} pattern=".*\S.*" defaultValue={user?.display_name} /></label>
-    <label className="form-label">Rol<select name="role" defaultValue={user?.role ?? 'cashier'}><option value="cashier">Cajero</option><option value="supervisor">Supervisor</option><option value="admin">Administrador</option></select></label>
+    {user?.role === 'supervisor' && <p role="alert">Este perfil Supervisor se conserva pendiente de clasificación. Elige Administrador o Cajero explícitamente.</p>}
+    <label className="form-label">Rol<select name="role" required defaultValue={user?.role === 'supervisor' ? '' : user?.role ?? 'cashier'}><option value="" disabled>Selecciona un rol</option><option value="cashier">Cajero</option><option value="admin">Administrador</option></select></label>
     <label className="checkbox-label"><input name="active" type="checkbox" defaultChecked={user?.active ?? true} />Usuario activo</label>
-    <label className="checkbox-label"><input name="can_credit" type="checkbox" defaultChecked={user?.can_credit} />Cajero puede operar créditos</label>
-    <label className="checkbox-label"><input name="can_expenses" type="checkbox" defaultChecked={user?.can_expenses} />Cajero puede registrar gastos</label>
+    <p className="muted">El cajero registra ventas y abonos, incluyendo ventas a crédito. No tiene permisos administrativos ni de gastos.</p>
     {mutation.error && <p role="alert">{mutation.error}</p>}<Button type="submit" disabled={mutation.busy}>Guardar perfil</Button>
   </form>
 }
@@ -49,6 +51,8 @@ export function Settings({ dark, toggleTheme }: { dark: boolean; toggleTheme: ()
         <p>COP · America/Bogota</p>
       </OperationForm></Panel>}
       <Users />
+      <ResetOperation />
+      <PeriodHistory />
     </>}
   </>
 }

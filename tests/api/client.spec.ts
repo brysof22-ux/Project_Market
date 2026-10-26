@@ -66,3 +66,89 @@ test('JSON exitoso incompatible no confirma ventas ni se interpreta como catálo
   await expect(api.operations('report',{})).rejects.toMatchObject({status:502,code:'INVALID_RESPONSE'})
   await expect(api.operations('sale.confirm',{},'same-key')).rejects.toMatchObject({status:502,code:'INVALID_RESPONSE'})
 })
+
+test('modo mantenimiento se reconoce en todos los endpoints', async () => {
+  const productId = '10000000-0000-0000-0000-000000000002'
+  const periodId = '10000000-0000-0000-0000-000000000003'
+
+  const calls: string[] = []
+
+  const api = createApiClient({
+    baseUrl: 'https://api.test',
+    getSession: async () => ({ access_token: 'test-token' }),
+    fetcher: async (input) => {
+      calls.push(String(input))
+
+      return Response.json(
+        {
+          error: {
+            code: 'SERVICE_MAINTENANCE',
+            message: 'PRIVATE_UPSTREAM_MESSAGE_DO_NOT_LEAK',
+          },
+        },
+        {
+          status: 503,
+          headers: { 'Retry-After': '300' },
+        },
+      )
+    },
+  })
+
+  const expected = {
+    status: 503,
+    code: 'SERVICE_MAINTENANCE',
+  }
+
+  const operations = [
+    () => api.getMe(),
+    () => api.catalog('products.list', {}),
+    () => api.operations('report', {}),
+    () => api.productImage(productId),
+    () => api.uploadProductImage(
+      productId,
+      new Blob(['test'], { type: 'image/png' }),
+      null,
+      periodId,
+    ),
+  ]
+
+  for (const operation of operations) {
+    try {
+      await operation()
+      throw new Error('Expected maintenance rejection')
+    } catch (cause) {
+      expect(cause).toBeInstanceOf(ApiError)
+      expect(cause).toMatchObject(expected)
+      expect((cause as Error).message).toContain('mantenimiento')
+      expect((cause as Error).message).not.toContain('PRIVATE_UPSTREAM_MESSAGE_DO_NOT_LEAK')
+    }
+  }
+
+  expect(calls).toHaveLength(operations.length)
+})
+
+test('503 sin codigo de mantenimiento conserva el error generico', async () => {
+  const api = createApiClient({
+    baseUrl: 'https://api.test',
+    getSession: async () => ({ access_token: 'test-token' }),
+    fetcher: async () =>
+      Response.json(
+        {
+          error: {
+            code: 'PRIVATE_ERROR',
+            message: 'PRIVATE_UPSTREAM_MESSAGE_DO_NOT_LEAK',
+          },
+        },
+        { status: 503 },
+      ),
+  })
+
+  try {
+    await api.catalog('products.list', {})
+    throw new Error('Expected API failure')
+  } catch (cause) {
+    expect(cause).toBeInstanceOf(ApiError)
+    expect((cause as ApiError).code).toBe('API_UNAVAILABLE')
+    expect((cause as Error).message).not.toContain('PRIVATE_UPSTREAM_MESSAGE_DO_NOT_LEAK')
+  }
+})

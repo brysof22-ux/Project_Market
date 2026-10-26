@@ -1,65 +1,74 @@
 import { useState } from 'react'
 import { EmptyState, PageHeading, Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
-import { useAuth } from '../auth/context'
-import { QueryState } from '../catalog/common'
-import { useOperationsQuery } from '../catalog/hooks'
-import { AmountField, ContactPicker, OperationForm } from './forms'
+import { QueryState, Pagination } from '../catalog/common'
+import { useOperationsMutation, useOperationsQuery, useSearch } from '../catalog/hooks'
 import { money } from '../../lib/utils'
-import type { Bootstrap, CreditAccount } from '../../../shared/operations'
+import type { Bootstrap, DebtDetail, DebtPage } from '../../../shared/operations'
 
 export function Credits() {
-  const bootstrap = useOperationsQuery<Bootstrap>('bootstrap', {})
+  const [status, setStatus] = useState('pending')
+  const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
-  const [notice, setNotice] = useState('')
-  const accounts = useOperationsQuery<CreditAccount[]>('credits.list', { limit: 20, offset })
+  const [revision, setRevision] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
-  const { profile } = useAuth()
-  const done = () => { setNotice('Operación de cartera registrada.'); accounts.refresh(); bootstrap.refresh() }
+  const query = useOperationsQuery<DebtPage>('debts.list', { status, search: useSearch(search), limit: 20, offset, revision })
   return <>
-    <PageHeading title="Créditos y cartera" subtitle="Saldos, cupos y abonos registrados. Los abonos no se cuentan como nuevas ventas." />
-    {notice && <p role="status">{notice}</p>}
-    <QueryState {...bootstrap} retry={bootstrap.refresh} />
-    <Panel><SectionTitle title="Cuentas por cobrar" /><QueryState {...accounts} retry={accounts.refresh} />
-      <div className="table-scroll"><table><thead><tr><th>CLIENTE</th><th>CUPO</th><th>DEUDA</th><th>DISPONIBLE</th><th>VENCIDO</th><th>HISTORIAL</th></tr></thead>
-        <tbody>{accounts.data?.map((account) => <tr key={account.id}><td>{account.name}</td><td>{money(account.authorized_limit)}</td><td>{money(account.outstanding)}</td><td>{money(account.available)}</td><td>{money(account.overdue)}</td><td><Button variant="ghost" onClick={() => setSelected(account.customer_id)}>Ver historial</Button></td></tr>)}</tbody></table></div>
-      {accounts.data?.length === 0 && <EmptyState text="No hay cuentas de crédito registradas." />}
-      <Button variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 20))}>Anterior</Button>
-      <Button variant="outline" disabled={(accounts.data?.length ?? 0) < 20} onClick={() => setOffset(offset + 20)}>Siguiente</Button>
+    <PageHeading title="Deudas" subtitle="Compras a crédito, abonos y saldos del período activo. Cada persona conserva su identidad interna." />
+    <Panel><SectionTitle title="Personas y compras a crédito" />
+      <div className="table-toolbar">
+        <label className="form-label">Buscar persona<input value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Nombre o teléfono" /></label>
+        <label className="form-label">Estado de deuda<select value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0) }}>
+          <option value="pending">Pendientes</option><option value="overdue">Vencidas</option><option value="paid">Pagadas / liquidadas</option><option value="all">Todas</option>
+        </select></label>
+      </div><QueryState {...query} retry={query.refresh} />
+      <div className="table-scroll"><table><thead><tr><th>PERSONA</th><th>COMPRA</th><th>PRODUCTOS</th><th>TOTAL</th><th>ABONOS</th><th>SALDO</th><th>ESTADO</th><th>DETALLE</th></tr></thead>
+        <tbody>{query.data?.rows.map((debt) => <tr key={debt.charge_id}>
+          <td><strong>{debt.name}</strong><small className="contact-phone">{debt.phone}</small><small className="contact-phone">ID persona: {debt.customer_id}</small></td>
+          <td>{debt.purchased_on}<small className="contact-phone">{debt.due_on ? `Vence: ${debt.due_on}` : 'Sin vencimiento'}</small></td>
+          <td>{debt.products.map((item, index) => <div key={index}>{item.quantity} × {item.name}</div>)}</td>
+          <td>{money(Number(debt.total))}</td><td>{money(Number(debt.paid))}</td><td>{money(Number(debt.outstanding))}</td>
+          <td>{debt.returned ? 'Devuelta' : ({ pending: 'Pendiente', overdue: 'Vencida', paid: 'Pagada' })[debt.status]}</td>
+          <td><Button variant="ghost" onClick={() => setSelected(debt.charge_id)}>Ver deuda de {debt.name}</Button></td>
+        </tr>)}</tbody></table></div>
+      {query.data && !query.data.rows.length && <EmptyState text="No hay deudas con estos filtros." />}
+      {query.data && <Pagination offset={offset} total={query.data.total} onChange={setOffset} />}
     </Panel>
-    {selected && <CreditHistory customerId={selected} />}
-    {bootstrap.data?.permissions.credit && <div className="settings-grid">
-      {profile?.role !== 'cashier' && <Panel><SectionTitle title="Autorizar cupo" />
-        <OperationForm action="credit.limit" onDone={done} label="Registrar autorización">
-          <ContactPicker required /><AmountField min="0" label="Nuevo cupo total" />
-          <label className="form-label">Motivo de autorización<input name="reason" required pattern=".*\S.*" maxLength={500} /></label>
-        </OperationForm>
-      </Panel>}
-      <Panel><SectionTitle title="Registrar abono" />
-        {bootstrap.data.session ? <OperationForm action="credit.receipt" defaults={{ session_id: bootstrap.data.session.id }} onDone={done} label="Registrar abono recibido">
-          <ContactPicker required /><AmountField />
+    {selected && <DebtHistory key={selected} chargeId={selected} onChanged={() => { setRevision((value) => value + 1) }} />}
+  </>
+}
+
+function DebtHistory({ chargeId, onChanged }: { chargeId: string; onChanged: () => void }) {
+  const detail = useOperationsQuery<DebtDetail>('debt.detail', { charge_id: chargeId })
+  const bootstrap = useOperationsQuery<Bootstrap>('bootstrap', {})
+  const mutation = useOperationsMutation()
+  const [notice, setNotice] = useState('')
+  const debt = detail.data
+  return <Panel><SectionTitle title="Detalle e historial de pagos" /><QueryState {...detail} retry={detail.refresh} />
+    {debt && <><p><strong>{debt.name}</strong> · {debt.phone}</p><p>Compra: {debt.purchased_on} · {debt.due_on ? `Vence: ${debt.due_on}` : 'Sin vencimiento'}</p>
+      <ul>{debt.products.map((item, index) => <li key={index}>{item.quantity} × {item.name} · {money(Number(item.total))}</li>)}</ul>
+      <p>Total: {money(Number(debt.total))} · Abono inicial: {money(Number(debt.initial_payment))} · Abonos posteriores: {money(Number(debt.paid) - Number(debt.initial_payment))} · Saldo: <strong>{money(Number(debt.outstanding))}</strong></p>
+      {debt.returned && <p className="notice">Compra devuelta · Reintegro: {money(Number(debt.refund_amount))} · Deuda cancelada por devolución: {money(Number(debt.return_credit_reduction))}. La reducción por devolución no es un abono.</p>}
+      <h3>Historial de pagos</h3><ul>{debt.receipts.map((receipt) => <li key={receipt.id}>{new Date(receipt.received_at).toLocaleString('es-CO')} · {receipt.kind === 'initial_payment' ? 'Pago inicial · ' : ''}{money(Number(receipt.amount))} · {receipt.method}{receipt.reference ? ` · ${receipt.reference}` : ''}</li>)}</ul>
+      {notice && <p role="status">{notice}</p>}
+      {Number(debt.outstanding) > 0 && <><QueryState {...bootstrap} retry={bootstrap.refresh} />
+        {bootstrap.data?.session ? <form className="settings-form" onSubmit={async (event) => {
+          event.preventDefault()
+          const form = event.currentTarget
+          const values = new FormData(form)
+          if (await mutation.run('debt.receipt', { charge_id: chargeId, session_id: bootstrap.data?.session?.id,
+            amount: values.get('amount'), method_id: values.get('method_id'), reference: values.get('reference') || null })) {
+            form.reset(); setNotice('Abono registrado en esta compra.'); detail.refresh(); bootstrap.refresh(); onChanged()
+          }
+        }}><fieldset disabled={mutation.busy} className="business-fieldset">
+          <p>El abono se aplica exclusivamente a esta compra, sin mezclar otras deudas de la persona.</p>
+          <label className="form-label">Valor del abono<input name="amount" type="number" required min="0.01" max={debt.outstanding} step="0.01" /></label>
           <label className="form-label">Método<select name="method_id" required>{bootstrap.data.methods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
           <label className="form-label">Referencia (obligatoria fuera de efectivo)<input name="reference" maxLength={160} /></label>
           <label className="checkbox-label"><input type="checkbox" required />Confirmo el valor recibido.</label>
-        </OperationForm> : <p>Abre tu caja para registrar abonos. <a href="#/contabilidad">Ir a caja</a></p>}
-      </Panel>
-    </div>}
-  </>
-}
-function CreditHistory({ customerId }: { customerId: string }) {
-  const [offset, setOffset] = useState(0)
-  const query = useOperationsQuery<{
-    purchases: {charge_id:string;purchased_on:string;due_on:string;principal:string;outstanding:string;status:string;responsible:string}[]
-    receipts: {source_id:string;occurred_at:string;amount:string;method:string;responsible:string}[]
-    limit_authorizations: {id:number;new_limit:string;reason:string;responsible:string}[]
-    returns: {id:string;created_at:string;refund_amount:string;credit_reduction:string;reason:string}[]
-  }>('credit.history', { customer_id: customerId, limit: 20, offset })
-  return <Panel><SectionTitle title="Historial de crédito" /><QueryState {...query} retry={query.refresh} />
-    {query.data && <><h3>Compras financiadas</h3><ul>{query.data.purchases.map((row) => <li key={row.charge_id}>{row.purchased_on} · Principal: {money(Number(row.principal))} · Saldo: {money(Number(row.outstanding))} · Vence: {row.due_on} · {row.responsible}</li>)}</ul>
-      <h3>Pagos y abonos</h3><ul>{query.data.receipts.map((row) => <li key={row.source_id}>{new Date(row.occurred_at).toLocaleString('es-CO')} · {money(Number(row.amount))} · {row.method} · {row.responsible}</li>)}</ul>
-      <h3>Autorizaciones de cupo</h3><ul>{query.data.limit_authorizations.map((row) => <li key={row.id}>{money(Number(row.new_limit))} · {row.reason} · {row.responsible}</li>)}</ul>
-      <h3>Devoluciones</h3><ul>{query.data.returns.map((row) => <li key={row.id}>{new Date(row.created_at).toLocaleString('es-CO')} · Reintegro: {money(Number(row.refund_amount))} · Deuda cancelada: {money(Number(row.credit_reduction))} · {row.reason}</li>)}</ul></>}
-    <Button variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 20))}>Anterior</Button>
-    <Button variant="outline" onClick={() => setOffset(offset + 20)}>Siguiente</Button>
+        </fieldset>{mutation.error && <p role="alert">{mutation.error}</p>}<Button type="submit" disabled={mutation.busy}>{mutation.busy ? 'Registrando…' : 'Registrar abono recibido'}</Button></form>
+          : bootstrap.data && <p>Abre tu propia caja desde <a href="#/pos">Punto de venta</a> para registrar abonos.</p>}
+      </>}
+    </>}
   </Panel>
 }

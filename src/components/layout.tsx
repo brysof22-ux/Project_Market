@@ -16,6 +16,7 @@ import {
 import { Button } from './ui/button'
 import { navigation, type PageId } from '../data/navigation'
 import { useAuth } from '../features/auth/context'
+import { canAccessRoute, homeRoute } from '../../shared/permissions'
 
 export function Layout({
   page,
@@ -57,6 +58,7 @@ export function Layout({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
   const current = navigation.find((item) => item.id === page)!
+  const allowedNavigation = navigation.filter((item) => canAccessRoute(profile?.role, item.id))
   return (
     <div className="app-shell">
       <a
@@ -80,7 +82,7 @@ export function Layout({
         id="main-navigation"
         className={`sidebar ${mobileOpen ? 'is-open' : ''}`}
       >
-        <a className="brand" href="#/dashboard">
+        <a className="brand" href={`#/${homeRoute(profile?.role)}`}>
           <span className="brand-mark">
             <ShoppingBag size={23} strokeWidth={1.8} />
           </span>
@@ -110,8 +112,7 @@ export function Layout({
         </div>
         <p className="nav-label">PRINCIPAL</p>
         <nav aria-label="Navegación principal">
-          {navigation.filter((item) => (item.id !== 'configuracion' || profile?.role === 'admin')
-            && (!['proveedores','auditoria'].includes(item.id) || profile?.role !== 'cashier')).map((item) => (
+          {allowedNavigation.map((item) => (
             <a
               key={item.id}
               href={`#/${item.id}`}
@@ -149,7 +150,7 @@ export function Layout({
           <div className="sidebar-footer">
             <span className="mini-brand">cai</span>
             <span>Hecho para tu negocio.</span>
-            <small>v1.0</small>
+            <small>v1.1</small>
           </div>
         </div>
       </aside>
@@ -182,7 +183,7 @@ export function Layout({
               <kbd>⌘ K</kbd>
               {search && (
                 <div className="search-results">
-                  {navigation
+                  {allowedNavigation
                     .filter((item) =>
                       item.label
                         .toLocaleLowerCase('es')
@@ -202,7 +203,7 @@ export function Layout({
                         <ChevronRight size={14} />
                       </a>
                     ))}
-                  {!navigation.some((item) =>
+                  {!allowedNavigation.some((item) =>
                     item.label
                       .toLocaleLowerCase('es')
                       .includes(search.toLocaleLowerCase('es')),
@@ -265,7 +266,7 @@ export function Layout({
             </h3>
             <p>
               {popover === 'notifications'
-                ? 'Revisa el inventario con el filtro de stock bajo para consultar las alertas actuales.'
+                ? profile?.role === 'cashier' ? 'Consulta las existencias desde Punto de venta y los saldos desde Deudas.' : 'Revisa el inventario con el filtro de stock bajo para consultar las alertas actuales.'
                 : popover === 'profile'
                   ? `${identity}. Acceso con Supabase Auth. Rol: ${roleLabel}.`
                   : 'Gestiona productos, ventas, cartera y caja desde el menú. Las operaciones confirmadas se registran en la tienda.'}

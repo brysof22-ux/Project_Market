@@ -98,7 +98,7 @@ test('carrito, límite de stock y venta persistente que descuenta existencias', 
   ).toBeDisabled()
   await page.goto('/#/inventario')
   await expect(
-    page.locator('tbody tr').filter({ hasText: 'CAF-001' }),
+    page.locator('tbody tr').filter({ hasText: 'Café de origen 500 g' }),
   ).toContainText('1 unidades')
 })
 
@@ -127,6 +127,7 @@ test('tema y configuración persistentes con validación de formulario', async (
   page,
 }) => {
   await page.goto('/#/configuracion')
+  await page.getByRole('button', { name: 'Cambiar a modo claro' }).click()
   await page.getByRole('button', { name: 'Cambiar a modo oscuro' }).click()
   await expect(page.locator('html')).toHaveClass('dark')
   await page.reload()
@@ -192,6 +193,7 @@ test('capturas de escritorio y consola limpia', async ({ page }) => {
   })
   await page.goto('/')
   await expect(page.locator('.recharts-area')).toHaveCount(2)
+  await page.getByRole('button', { name: 'Modo claro', exact: true }).click()
   await page.screenshot({
     path: 'test-results/dashboard-desktop.png',
     fullPage: true,

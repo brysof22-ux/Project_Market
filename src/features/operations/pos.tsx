@@ -3,8 +3,10 @@ import { EmptyState, PageHeading, Panel, SectionTitle } from '../../components/c
 import { Button } from '../../components/ui/button'
 import { QueryState, Pagination } from '../catalog/common'
 import { useCatalogQuery, useOperationsMutation, useOperationsQuery, useSearch } from '../catalog/hooks'
-import { ContactPicker } from './forms'
 import { SalesHistory } from './sales'
+import { OwnCash } from './own-cash'
+import { ProductImage } from '../catalog/product-image'
+import type { Contact } from '../../../shared/catalog'
 import { money } from '../../lib/utils'
 import { parseMinor } from '../payments/types'
 import type { Product, ProductPage } from '../../../shared/catalog'
@@ -58,6 +60,11 @@ export function PointOfSale() {
     }
     if (await mutation.run('sale.confirm', {
       session_id: bootstrap.data?.session?.id, customer_id: values.get('customer_id') || null,
+      buyer_name: values.get('buyer_name') || null,
+      customer_name: financed ? values.get('customer_name') : null,
+      customer_phone: financed ? values.get('customer_phone') : null,
+      due_on: financed ? values.get('due_on') || null : null,
+      expected_total: (totalMinor / 100).toFixed(2),
       finance: financed, lines: lines.map(({ product, quantity }) => ({ product_id: product.id, quantity })), payments,
     })) {
       setCart({}); setFinanced(false); setConfirmed(false); setNotice('Venta registrada en la tienda.'); setRevision((value) => value + 1)
@@ -67,13 +74,13 @@ export function PointOfSale() {
     <PageHeading title="Punto de venta" subtitle="Las ventas confirmadas registran pagos y descuentan existencias de forma transaccional." />
     {notice && <p role="status">{notice}</p>}
     <QueryState {...bootstrap} retry={bootstrap.refresh} />
-    {bootstrap.data && !bootstrap.data.session && <p role="alert" className="notice">Abre tu caja antes de registrar ventas. <a href="#/contabilidad">Ir a caja</a></p>}
+    {bootstrap.data && <OwnCash session={bootstrap.data.session} onChanged={() => setRevision((value) => value + 1)} />}
     <div className="pos-grid">
-      <Panel><SectionTitle title="Productos" /><label className="search-field"><input aria-label="Buscar productos para venta" value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Nombre, SKU o código de barras" /></label>
+      <Panel><SectionTitle title="Productos" /><label className="search-field"><input aria-label="Buscar productos para venta" value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar producto por nombre" /></label>
         <QueryState {...query} retry={query.refresh} />
         <div className="product-grid">{query.data?.rows.filter((row) => row.active).map((product) => <Button key={product.id} variant="outline"
-          aria-label={`Agregar ${product.name}`} disabled={mutation.busy || product.stock <= (cart[product.id]?.quantity ?? 0)} onClick={() => change(product, 1)}>
-          {product.name} · {money(Number(product.price))} · {product.stock} uds.</Button>)}</div>
+          className="pos-product-card" aria-label={`Agregar ${product.name}`} disabled={mutation.busy || product.stock <= (cart[product.id]?.quantity ?? 0)} onClick={() => change(product, 1)}>
+          <ProductImage product={product} /><strong>{product.name}</strong><span className="pos-product-price">{money(Number(product.price))}</span><span>{product.stock} disponibles</span></Button>)}</div>
         {query.data && <Pagination offset={offset} total={query.data.total} onChange={setOffset} />}
       </Panel>
       <Panel><SectionTitle title="Venta actual" /><ul>{lines.map(({ product, quantity }) => <li key={product.id}>
@@ -84,12 +91,14 @@ export function PointOfSale() {
         <form className="settings-form" onSubmit={confirm} key={revision} onChange={(event) => {
           if (!(event.target instanceof Element) || event.target.getAttribute('name') !== 'confirm_payments') setConfirmed(false)
         }}>
-          <fieldset disabled={mutation.busy} className="business-fieldset"><ContactPicker required={financed} />
+          <fieldset disabled={mutation.busy} className="business-fieldset">
+            <label className="checkbox-label"><input type="checkbox" checked={financed} onChange={(event) => setFinanced(event.target.checked)} />Vender a crédito</label>
+            {financed ? <CreditBuyer /> : <label className="form-label">Nombre del comprador (opcional)<input name="buyer_name" maxLength={160} placeholder="Consumidor final" /></label>}
             {bootstrap.data?.methods.map((method) => <div key={method.id}>
               <label className="form-label">Pago {method.name}<input name={`amount-${method.id}`} type="number" step="0.01" min="0" max="1000000000000" placeholder="0" /></label>
               {method.requires_reference && <label className="form-label">Referencia {method.name}<input name={`reference-${method.id}`} maxLength={160} /></label>}
             </div>)}
-            {bootstrap.data?.permissions.credit && <label className="checkbox-label"><input type="checkbox" checked={financed} onChange={(event) => setFinanced(event.target.checked)} />Financiar saldo pendiente</label>}
+            {financed && <p className="muted">Los pagos registrados son el abono inicial. El saldo restante se registra como deuda; no necesitas autorizar un cupo.</p>}
             <label className="checkbox-label"><input name="confirm_payments" type="checkbox" required checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confirmo los pagos recibidos. Las transferencias y tarjetas se verifican manualmente.</label>
           </fieldset>
           {(validation || mutation.error) && <p role="alert">{validation || mutation.error}</p>}
@@ -98,5 +107,33 @@ export function PointOfSale() {
       </Panel>
     </div>
     <SalesHistory revision={revision} onChanged={() => setRevision((value) => value + 1)} />
+  </>
+}
+
+function CreditBuyer() {
+  const [existing, setExisting] = useState(false)
+  return <>
+    <label className="checkbox-label"><input type="checkbox" checked={existing} onChange={(event) => setExisting(event.target.checked)} />Usar una persona existente</label>
+    {existing ? <ExistingDebtor /> : <>
+      <label className="form-label">Nombre completo<input name="customer_name" required maxLength={160} pattern=".*\S.*" /></label>
+      <label className="form-label">Teléfono<input name="customer_phone" type="tel" required maxLength={30} minLength={7} pattern="[+0-9() .-]{7,30}" /></label>
+      <p className="muted">Se crea una identidad nueva. Los nombres o teléfonos coincidentes nunca unen deudas automáticamente.</p>
+    </>}
+    <label className="form-label">Fecha de vencimiento (opcional)<input name="due_on" type="date" /></label>
+  </>
+}
+
+function ExistingDebtor() {
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState('')
+  const query = useCatalogQuery<{ customers: Pick<Contact, 'id' | 'name' | 'phone' | 'active' | 'version'>[] }>('customers.search', { search: useSearch(search), limit: 100 })
+  return <>
+    <label className="form-label">Buscar persona existente<input value={search} onChange={(event) => setSearch(event.target.value)} maxLength={100} placeholder="Nombre o teléfono" /></label>
+    <QueryState {...query} retry={query.refresh} />
+    <label className="form-label">Persona existente<select name="customer_id" required value={selected} onChange={(event) => setSelected(event.target.value)}>
+      <option value="">Selecciona una persona</option>
+      {query.data?.customers.filter((row) => row.active).map((row) => <option value={row.id} key={row.id}>{row.name} · {row.phone} · {row.id}</option>)}
+    </select></label>
+    <p className="muted">Verifica teléfono e identificador: dos personas pueden tener el mismo nombre.</p>
   </>
 }

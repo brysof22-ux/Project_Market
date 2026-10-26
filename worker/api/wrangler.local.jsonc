@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "cai-market-api-v11-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": false,
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "cai-market-media-v11-local", "remote": false }],
+  "vars": {
+    "LOCAL_ONLY": "true",
+    "SUPABASE_URL": "https://local-only.invalid",
+    "ALLOWED_ORIGIN": "http://localhost:5173"
+  }
+}

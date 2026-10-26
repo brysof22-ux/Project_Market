@@ -1,18 +1,30 @@
 import type { BrowserContext } from '@playwright/test'
-import { createDatabase, resetDatabase, staffQuery } from '../credit/fixture'
+import { resetDatabase, staffQuery } from '../credit/fixture'
+import { createV11Database } from '../credit/v11-fixture'
 import { createWorker, type Env } from '../../worker/api/src'
 import { products } from '../../src/data/mock'
 
 // Test-only database and Auth boundary. UI -> real Worker -> real SQL RPCs in
 // PGlite. No remote endpoints, signatures, production data or credential use.
 export function businessFixture(context: BrowserContext, userId: string, role: string) {
-  let database: ReturnType<typeof createDatabase> | undefined
+  let database: ReturnType<typeof createV11Database> | undefined
   let queue: Promise<unknown> = Promise.resolve()
-  const env: Env = { SUPABASE_URL: 'https://cai-auth-test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test', ALLOWED_ORIGIN: 'http://127.0.0.1:5174', MEDIA: {} }
+  const objects = new Map<string, ArrayBuffer>()
+  const env: Env = { SUPABASE_URL: 'https://cai-auth-test.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test', ALLOWED_ORIGIN: 'http://127.0.0.1:5174', MEDIA: {
+    async put(key: string, value: ArrayBuffer) {
+      if (objects.has(key)) return null
+      objects.set(key, value.slice(0)); return { etag: `test-${objects.size}`, size: value.byteLength }
+    },
+    async get(key: string) {
+      const value = objects.get(key)
+      return value ? { body: new Blob([value]).stream(), size: value.byteLength, etag: 'test' } : null
+    },
+  } }
   function getDatabase() {
     database ??= (async () => {
-      const db = await createDatabase()
-      await resetDatabase(db)
+      const db = await createV11Database()
+      await resetDatabase(db, true)
+      await db.query('UPDATE pos.customers SET phone=$1 WHERE id=$2', ['3001234567', '20000000-0000-0000-0000-000000000001'])
       await db.query('UPDATE pos.profiles SET role=$1 WHERE id=$2', [role, userId])
       await db.exec('DELETE FROM pos.inventory_balances; DELETE FROM pos.products;')
       for (const [index, product] of products.entries()) {
@@ -32,7 +44,10 @@ export function businessFixture(context: BrowserContext, userId: string, role: s
     const db = await getDatabase()
     const body = JSON.parse(String(init?.body))
     const execute = async () => {
-      const claims = { sub: userId, role: 'authenticated', exp: 4102444800 }
+      let evidence: Record<string, unknown> = {}
+      try { evidence = JSON.parse(Buffer.from((new Headers(init?.headers).get('Authorization') ?? '').split('.')[1], 'base64url').toString('utf8')) }
+      catch { /* Malformed fake credentials have no recent-auth evidence. */ }
+      const claims = { sub: userId, role: 'authenticated', exp: 4102444800, session_id: evidence.session_id, amr: evidence.amr }
       if (path.endsWith('/cai_current_profile')) return (await staffQuery(db,'SELECT * FROM public.cai_current_profile()',[],claims)).rows
       if (path.endsWith('/cai_report')) return (await staffQuery<{value:unknown}>(db,'SELECT public.cai_report($1::jsonb) AS value',[JSON.stringify(body.p_data)],claims)).rows[0].value
       const rpc = path.endsWith('/cai_catalog') ? 'cai_catalog' : path.endsWith('/cai_operations') ? 'cai_operations' : null

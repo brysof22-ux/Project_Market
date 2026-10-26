@@ -19,7 +19,7 @@ export const navigation = [
   { id: 'contabilidad', label: 'Contabilidad', icon: Wallet },
   { id: 'clientes', label: 'Clientes', icon: Users },
   { id: 'proveedores', label: 'Proveedores', icon: Truck },
-  { id: 'creditos', label: 'Créditos y cartera', icon: CreditCard },
+  { id: 'creditos', label: 'Deudas', icon: CreditCard },
   { id: 'auditoria', label: 'Auditoría', icon: ShieldCheck },
   { id: 'configuracion', label: 'Configuración', icon: Settings2 },
 ] as const

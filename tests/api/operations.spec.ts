@@ -41,7 +41,8 @@ for (const [action, data, key, rpc, parameters] of [
 ] as const) {
   test(`operación ${action}: RPC correcta, parámetros mínimos y JWT original`, async () => {
     const payload = { fixture: 'business-response' }
-    const { api, calls } = fixture(Response.json(payload))
+    // Administrative reports require an administrator in V1.1.
+    const { api, calls } = fixture(Response.json(payload), action === 'report' ? { rows: [{ ...profile, role: 'admin' }] } : {})
     const response = await api.fetch(request({ action, data, ...(key ? { key } : {}), p_actor: 'UNTRUSTED_ACTOR' }), env)
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(payload)
@@ -109,7 +110,7 @@ for (const action of ['bootstrap', 'report']) {
   test(`redirección RPC ${action}: no sigue Location ni expone datos sensibles`, async () => {
     const { api, calls } = fixture(new Response(sensitive, {
       status: 302, headers: { Location: `https://evil.test/${sensitive}` },
-    }))
+    }), action === 'report' ? { rows: [{ ...profile, role: 'admin' }] } : {})
     const response = await api.fetch(request({ action, data: {} }), env)
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: { code: 'CATALOG_UNAVAILABLE', message: 'El catálogo no está disponible.' } })
@@ -135,7 +136,7 @@ for (const upstreamStatus of [401, 403, 400, 409, 500]) {
   })
 }
 
-for (const error of ['INSUFFICIENT_STOCK', 'IDEMPOTENCY_CONFLICT', 'AMOUNT_EXCEEDS_DEBT', '__proto__', sensitive]) {
+for (const error of ['INSUFFICIENT_STOCK', 'PRICE_CHANGED', 'IDEMPOTENCY_CONFLICT', 'AMOUNT_EXCEEDS_DEBT', '__proto__', sensitive]) {
   test(`error comercial ${error}: solo se conserva el código permitido`, async () => {
     const { api } = fixture(Response.json({ message: error, details: sensitive }, { status: 400 }))
     const response = await api.fetch(request({ action: 'sale.confirm', data: {}, key: 'same-key' }), env)

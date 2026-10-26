@@ -3,6 +3,9 @@ import { Layout } from './components/layout'
 import { navigation, type PageId } from './data/navigation'
 import { useAuth } from './features/auth/context'
 import { Login } from './features/auth/login'
+import { canAccessRoute, homeRoute } from '../shared/permissions'
+import { Button } from './components/ui/button'
+import { OperationPeriod } from './features/operations/period'
 const Dashboard = lazy(() =>
   import('./features/dashboard').then((module) => ({
     default: module.Dashboard,
@@ -44,13 +47,13 @@ function readPage(): PageId {
 }
 function readTheme() {
   try {
-    return localStorage.getItem('cai-market:theme:v1') === 'dark'
+    return localStorage.getItem('cai-market:theme:v1') !== 'light'
   } catch {
-    return false
+    return true
   }
 }
 export default function App() {
-  const { session, profile, loading } = useAuth()
+  const { session, profile, loading, signOut } = useAuth()
   const [page, setPage] = useState<PageId>(readPage)
   const [dark, setDark] = useState(readTheme)
   useEffect(() => {
@@ -73,6 +76,9 @@ export default function App() {
   const toggleTheme = () => setDark((previous) => !previous)
   if (loading) return <main className="auth-page"><p role="status">Comprobando sesión…</p></main>
   if (!session || !profile) return <Login dark={dark} toggleTheme={toggleTheme} />
+  if (profile.role === 'supervisor') return <main className="auth-page"><div className="auth-card"><h1>Clasificación de acceso pendiente</h1><p>Tu perfil se conserva. Un administrador debe asignarte el rol Administrador o Cajero para continuar.</p><Button onClick={() => void signOut()}>Cerrar sesión</Button></div></main>
+  const allowed = canAccessRoute(profile.role, page)
+  const visiblePage = allowed ? page : homeRoute(profile.role) as PageId
   const content = {
     dashboard: <Dashboard />,
     pos: <PointOfSale />,
@@ -86,18 +92,19 @@ export default function App() {
     configuracion: profile.role === 'admin' ? <Settings dark={dark} toggleTheme={toggleTheme} /> : <p role="alert">Esta sección requiere un administrador.</p>,
   }
   return (
-      <Layout key={`${session.user.id}:${profile.role}`} page={page} dark={dark} toggleTheme={toggleTheme}>
-        <Suspense
+      <Layout key={`${session.user.id}:${profile.role}`} page={visiblePage} dark={dark} toggleTheme={toggleTheme}>
+        <OperationPeriod key={`${session.user.id}:${profile.role}`}><Suspense
           fallback={
             <p role="status" className="empty-state">
               Cargando vista…
             </p>
           }
         >
-          <div key={page} className="page-content">
-            {content[page]}
+          <div key={visiblePage} className="page-content">
+            {!allowed && <p role="alert">No tienes permiso para acceder a esta sección.</p>}
+            {content[visiblePage]}
           </div>
-        </Suspense>
+        </Suspense></OperationPeriod>
       </Layout>
   )
 }

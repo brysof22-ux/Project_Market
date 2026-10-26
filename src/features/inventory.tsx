@@ -7,31 +7,60 @@ import { useAuth } from './auth/context'
 import { useCatalogMutation, useCatalogQuery, useSearch } from './catalog/hooks'
 import { QueryState, Pagination } from './catalog/common'
 import { ContactPicker } from './catalog/contact-picker'
+import { ProductImage } from './catalog/product-image'
+import { prepareProductImage } from './catalog/product-photo'
+import { api } from '../lib/api'
+import { ApiError } from '../lib/api-client'
+import { useOperationPeriod } from './operations/period-context'
 import type { Product, ProductPage, StockMovement } from '../../shared/catalog'
 
 function ProductEditor({ product, done }: { product: Product | null; done: () => void }) {
   const mutation = useCatalogMutation()
+  const period = useOperationPeriod()
+  const [photo, setPhoto] = useState<Blob | null>(null)
+  const [photoError, setPhotoError] = useState('')
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [preparing, setPreparing] = useState(false)
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const values = Object.fromEntries(new FormData(event.currentTarget))
-    if (await mutation.run('product.save', {
-      ...values, ...(product ? { id: product.id, version: product.version } : {}),
-      purchase_price: values.purchase_price || null, supplier_id: values.supplier_id || null,
-      minimum: Number(values.minimum), active: values.active === 'on',
-    })) done()
+    const result = savedId ? { id: savedId } : await mutation.run('product.save', {
+      name: values.name, price: values.price, purchase_price: values.purchase_price || null,
+      ...(product ? { id: product.id, version: product.version } : {}),
+      minimum: Number(values.minimum), active: product?.active ?? true,
+      quantity: Number(values.quantity), expected_stock: product?.stock ?? 0,
+    })
+    if (!result || typeof result.id !== 'string') return
+    setSavedId(result.id)
+    if (photo && period) {
+      setUploading(true); setPhotoError('')
+      try { await api.uploadProductImage(result.id, photo, product?.image_id ?? null, period) }
+      catch (cause) { setPhotoError(cause instanceof ApiError ? cause.message : 'No se pudo adjuntar la fotografía. El producto ya se guardó.'); return }
+      finally { setUploading(false) }
+    }
+    done()
   }
   return <form className="settings-form" onSubmit={save}>
+    <fieldset className="business-fieldset" disabled={mutation.busy || uploading || !!savedId}>
     <label className="form-label">Nombre<input name="name" required maxLength={160} pattern=".*\S.*" defaultValue={product?.name} /></label>
-    <label className="form-label">SKU<input name="sku" required maxLength={100} pattern=".*\S.*" defaultValue={product?.sku} /></label>
-    <label className="form-label">Código de barras<input name="barcode" maxLength={100} defaultValue={product?.barcode ?? ''} /></label>
-    <label className="form-label">Categoría<input name="category" required maxLength={100} defaultValue={product?.category ?? 'Sin categoría'} /></label>
     <label className="form-label">Precio de venta<input name="price" type="number" required min="0.01" step="0.01" defaultValue={product?.price} /></label>
     <label className="form-label">Precio de compra<input name="purchase_price" type="number" min="0" step="0.01" defaultValue={product?.purchase_price ?? ''} /></label>
+    <label className="form-label">Cantidad disponible<input name="quantity" type="number" required min="0" max="1000000" step="1" defaultValue={product?.stock ?? 0} /></label>
     <label className="form-label">Stock mínimo<input name="minimum" type="number" required min="0" max="1000000" step="1" defaultValue={product?.minimum ?? 0} /></label>
-    <ContactPicker name="supplier_id" label="Proveedor" supplier defaultId={product?.supplier_id ?? ''} />
-    <label className="checkbox-label"><input name="active" type="checkbox" defaultChecked={product?.active ?? true} />Producto activo</label>
-    {mutation.error && <p role="alert">{mutation.error}</p>}
-    <Button type="submit" disabled={mutation.busy}>{mutation.busy ? 'Guardando…' : 'Guardar producto'}</Button>
+    {product && <ProductImage product={product} />}
+    <label className="form-label">Fotografía del producto<input type="file" accept="image/png,image/jpeg,image/webp" onChange={async (event) => {
+      const file = event.currentTarget.files?.[0]
+      setPhoto(null); setPhotoError(''); setPreparing(true)
+      if (!file) { setPreparing(false); return }
+      try { setPhoto(await prepareProductImage(file)) }
+      catch (cause) { setPhotoError(cause instanceof Error ? cause.message : 'Fotografía no válida.') }
+      finally { setPreparing(false) }
+    }} /></label><p className="muted">PNG, JPEG o WebP · máximo 2 MiB y 4096 × 4096 píxeles.</p>
+    </fieldset>
+    {(mutation.error || photoError) && <p role="alert">{mutation.error || photoError}</p>}
+    {savedId && photoError && <p>El producto ya se guardó. Reintentar solo adjunta la fotografía y no repite el ajuste de existencias.</p>}
+    <Button type="submit" disabled={mutation.busy || uploading || preparing || (!!photoError && !savedId)}>{mutation.busy || uploading || preparing ? 'Guardando…' : savedId ? 'Reintentar fotografía' : 'Guardar producto'}</Button>
   </form>
 }
 
@@ -64,7 +93,7 @@ function StockHistory({ product }: { product: Product }) {
 
 export function Inventory() {
   const { profile } = useAuth()
-  const canEdit = profile?.role === 'admin' || profile?.role === 'supervisor'
+  const canEdit = profile?.role === 'admin'
   const [search, setSearch] = useState('')
   const [lowOnly, setLowOnly] = useState(window.location.hash.includes('stock=bajo'))
   const [offset, setOffset] = useState(0)
@@ -78,7 +107,7 @@ export function Inventory() {
       {canEdit && <Button onClick={() => setEditor({ kind: 'product', product: null })}>Nuevo producto</Button>}
     </PageHeading>
     {notice && <p role="status">{notice}</p>}
-    <Panel><SectionTitle title="Catálogo de productos" subtitle="Busca por nombre, SKU o código de barras" />
+    <Panel><SectionTitle title="Catálogo de productos" subtitle="Productos, fotografías y existencias" />
       <div className="table-toolbar">
         <label className="search-field"><input aria-label="Buscar productos" value={search} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar productos…" maxLength={100} /></label>
         <label className="checkbox-label"><input type="checkbox" checked={lowOnly} onChange={(event) => { setLowOnly(event.target.checked); setOffset(0) }} />Solo stock bajo</label>
@@ -86,12 +115,12 @@ export function Inventory() {
       </div>
       <QueryState {...query} retry={query.refresh} />
       {query.data && <><div className="table-scroll"><table><thead><tr>
-        <th>PRODUCTO</th><th>CÓDIGO</th><th>CATEGORÍA</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th>ACCIONES</th>
+        <th>FOTO</th><th>PRODUCTO</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th>ACCIONES</th>
       </tr></thead><tbody>{query.data.rows.map((product) => <tr key={product.id}>
-        <td><strong>{product.name}</strong></td><td>{product.sku}</td><td>{product.category}</td><td>{money(Number(product.price))}</td><td>{product.stock} unidades</td>
+        <td><ProductImage product={product} /></td><td><strong>{product.name}</strong></td><td>{money(Number(product.price))}</td><td>{product.stock} unidades</td>
         <td><Badge tone={!product.active ? 'neutral' : product.stock <= product.minimum ? 'amber' : 'green'}>{!product.active ? 'Inactivo' : product.stock <= product.minimum ? 'Stock bajo' : 'Disponible'}</Badge></td>
-        <td>{canEdit && <><Button variant="ghost" onClick={() => setEditor({ kind: 'product', product })}>Editar {product.sku}</Button><Button variant="ghost" disabled={!product.active} onClick={() => setEditor({ kind: 'stock', product })}>Mover {product.sku}</Button></>}
-          <Button variant="ghost" onClick={() => setEditor({ kind: 'history', product })}>Historial {product.sku}</Button></td>
+        <td>{canEdit && <><Button variant="ghost" onClick={() => setEditor({ kind: 'product', product })}>Editar {product.name}</Button><Button variant="ghost" disabled={!product.active} onClick={() => setEditor({ kind: 'stock', product })}>Mover {product.name}</Button></>}
+          <Button variant="ghost" onClick={() => setEditor({ kind: 'history', product })}>Historial {product.name}</Button></td>
       </tr>)}</tbody></table>{!query.data.rows.length && <EmptyState />}</div>
         <Pagination offset={offset} total={query.data.total} onChange={setOffset} /></>}
     </Panel>

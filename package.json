@@ -15,7 +15,7 @@
     "check:deployment": "node scripts/check-deployment.mjs",
     "check:frontend-config": "node --experimental-strip-types scripts/check-frontend-config.mts",
     "test:api": "playwright test -c playwright.api.config.ts",
-    "dev:api": "npx wrangler@4 dev --config worker/api/wrangler.jsonc --local"
+    "dev:api": "npx wrangler@4 dev --config worker/api/wrangler.local.jsonc --local"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.3.1",

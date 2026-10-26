@@ -118,6 +118,7 @@ test('login móvil, modo oscuro y ausencia de desbordamiento', async ({ page, co
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await expect(loginHeading(page)).toBeVisible()
+  await page.getByRole('button', { name: 'Cambiar a modo claro' }).click()
   await page.getByRole('button', { name: 'Cambiar a modo oscuro' }).click()
   await expect(page.locator('html')).toHaveClass('dark')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

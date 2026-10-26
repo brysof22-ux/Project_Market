@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import { ApiError } from '../../lib/api-client'
 import type { CatalogAction } from '../../../shared/catalog'
 import type { OperationAction } from '../../../shared/operations'
+import { useOperationPeriod } from '../operations/period-context'
 
 function useRemoteQuery<T>(section: 'catalog' | 'operations', action: CatalogAction | OperationAction, parameters: Record<string, unknown>) {
   const serialized = JSON.stringify(parameters)
@@ -27,22 +28,24 @@ function useRemoteQuery<T>(section: 'catalog' | 'operations', action: CatalogAct
 }
 
 function useRemoteMutation<A extends CatalogAction | OperationAction>(section: 'catalog' | 'operations') {
+  const period = useOperationPeriod()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const pending = useRef<{ signature: string; key: string } | null>(null)
   const running = useRef(false)
   const run = async (action: A, data: Record<string, unknown>) => {
     if (running.current) return false
-    const signature = JSON.stringify({ action, data })
+    const payload = { ...data, ...(period ? { expected_period: period } : {}) }
+    const signature = JSON.stringify({ action, data: payload })
     if (pending.current?.signature !== signature) pending.current = { signature, key: crypto.randomUUID() }
     running.current = true
     setBusy(true)
     setError('')
     try {
-      if (section === 'catalog') await api.catalog(action as CatalogAction, data, pending.current.key)
-      else await api.operations(action as OperationAction, data, pending.current.key)
+      const result = section === 'catalog' ? await api.catalog<Record<string, unknown>>(action as CatalogAction, payload, pending.current.key)
+        : await api.operations<Record<string, unknown>>(action as OperationAction, payload, pending.current.key)
       pending.current = null
-      return true
+      return result
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'No se pudo guardar la operación.')
       return false

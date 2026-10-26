@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-26",
+  "timezone": "America/Bogota",
+  "branch": "feature/cai-market-v1.1",
+  "base_commit": "6ee1211bac5a9b6958994ea6cb2b4a7b3650426b",
+  "migration": {
+    "file": "supabase/migrations/20261025000900_v11_periods_permissions.sql",
+    "sha256": "0953e43c041ef2d10877100755008ae62d2e648a65b6fe1024d0df77f0f127db",
+    "original_migrations_001_008_unchanged": true
+  },
+  "checks": {
+    "api": { "command": "npm run test:api", "passed": 163 },
+    "sql": { "command": "npm run test:credit", "passed": 125, "v1": 83, "v11": 42 },
+    "ui": { "command": "npx playwright test --workers=1", "passed": 47 },
+    "api_typescript": "PASS",
+    "credit_typescript": "PASS",
+    "frontend_typescript": "PASS",
+    "lint": "PASS",
+    "production_build": "PASS",
+    "bundle_pattern_scan": "PASS",
+    "local_csp_browser": { "passed": 7, "remote_requests": 0 },
+    "native_workerd": { "passed": 14, "remote_requests": 0 }
+  },
+  "concurrency": {
+    "postgresql": "17.11",
+    "harness": "scripts/v11/verify-concurrency.mjs",
+    "local_report": ".cache/v11-concurrency-b5236574-e24e-4197-b837-25fa95f3723d/result.json",
+    "passed": true,
+    "independent_connections": true,
+    "synthetic_data_only": true,
+    "cluster_stopped": true,
+    "scenarios": [
+      "last_stock",
+      "sale_retry",
+      "receipt_overpay",
+      "receipt_retry",
+      "double_return",
+      "double_close",
+      "closed_cash_sale",
+      "reset_rejects_writer",
+      "writer_rejects_reset"
+    ]
+  },
+  "production_changes": false,
+  "remote_migrations": false,
+  "deployments": false,
+  "commits_or_push": false,
+  "remaining_environment_verifications": [
+    "Rehearse against an isolated copy of the current original Supabase before publication",
+    "Verify effective R2 bucket permissions",
+    "Verify real authorized login in an isolated Supabase environment",
+    "Coordinate migration, Worker and frontend publication after explicit authorization"
+  ]
+}

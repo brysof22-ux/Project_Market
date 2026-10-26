@@ -28,7 +28,9 @@ export async function createDatabase(beforeProfile = false) {
     SET ROLE credit_migrator;`)
   const directory = path.resolve('supabase/migrations')
   for (const name of (await readdir(directory))
-    .filter((name) => name.endsWith('.sql') && (!beforeProfile || name < '20261023000500'))
+    // V1 contracts stay pinned to their released migrations. V1.1 has a separate
+    // upgrade fixture so its stricter role/period policy is tested explicitly.
+    .filter((name) => name.endsWith('.sql') && name < '20261025000900' && (!beforeProfile || name < '20261023000500'))
     .sort()) {
     await db.exec(await readFile(path.join(directory, name), 'utf8'))
   }
@@ -41,7 +43,7 @@ export async function createDatabase(beforeProfile = false) {
   return db
 }
 
-export async function resetDatabase(db: PGlite) {
+export async function resetDatabase(db: PGlite, v11 = false) {
   await db.exec('RESET ROLE')
   await db.exec(`CREATE OR REPLACE FUNCTION pos.business_now() RETURNS timestamptz LANGUAGE sql VOLATILE
     SET search_path = pg_catalog AS $$ SELECT timestamptz '2026-10-23 15:00:00+00' $$;`)
@@ -52,6 +54,8 @@ export async function resetDatabase(db: PGlite) {
   await db.exec(
     `TRUNCATE ${tables.rows.map((row) => row.name).join(',')} RESTART IDENTITY CASCADE`,
   )
+  if (v11) await db.exec(`INSERT INTO pos.operating_periods(id) VALUES('11111111-1111-4111-8111-111111111111');
+    INSERT INTO pos.operation_state VALUES(true,'11111111-1111-4111-8111-111111111111',1);`)
   await db.exec(`INSERT INTO auth.users VALUES('${ids.actor}'),('${ids.otherActor}');
     INSERT INTO pos.profiles(id, display_name, role) VALUES('${ids.actor}', 'Cajero de prueba', 'cashier'),
       ('${ids.otherActor}', 'Otro empleado activo', 'admin');

@@ -1,12 +1,15 @@
 import { readStaffProfile } from '../../../shared/profile'
 import { catalogRequest, CatalogError } from './catalog'
+import { productImage } from './media'
 
 export interface Env {
   SUPABASE_URL: string
   SUPABASE_PUBLISHABLE_KEY: string
   ALLOWED_ORIGIN: string
-  // Reserved R2 binding. These read-only endpoints never access media.
-  // Keep opaque until an authorized upload API defines its storage contract.
+  // Development-only fence. When present it must be "true"; false/empty is an
+  // invalid configuration, never an escape hatch to a remote database.
+  LOCAL_ONLY?: string
+  // Validated structurally at the storage boundary; absent bindings fail closed.
   MEDIA: unknown
 }
 export type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -18,7 +21,11 @@ class HttpError extends Error {
 function configuration(env: Env) {
   try {
     const url = new URL(env.SUPABASE_URL)
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+    const localOnly = env.LOCAL_ONLY !== undefined
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    if ((localOnly && (env.LOCAL_ONLY !== 'true' || (!loopback && !url.hostname.endsWith('.invalid'))))
+      || (url.protocol !== 'https:' && !(localOnly && loopback && url.protocol === 'http:'))
+      || url.username || url.password || url.search || url.hash
       || url.pathname !== '/' || !env.SUPABASE_PUBLISHABLE_KEY?.startsWith('sb_publishable_')) throw new Error()
     return { url: url.origin, key: env.SUPABASE_PUBLISHABLE_KEY }
   } catch { throw new HttpError(503, 'SERVICE_UNAVAILABLE', 'Servicio temporalmente no disponible.') }
@@ -127,29 +134,41 @@ export function createWorker(upstream: Fetcher = fetch) {
         if (origin !== null) headers.set('Access-Control-Allow-Origin', env.ALLOWED_ORIGIN)
         const path = new URL(request.url).pathname
         const businessRoute = path === '/api/catalog' || path === '/api/operations'
-        if (path !== '/api/me' && path !== '/health' && !businessRoute) throw new HttpError(404, 'NOT_FOUND', 'Ruta no encontrada.')
+        const imageRoute = /^\/api\/products\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/image$/i.exec(path)
+        if (path !== '/api/me' && path !== '/health' && !businessRoute && !imageRoute) throw new HttpError(404, 'NOT_FOUND', 'Ruta no encontrada.')
         const expectedMethod = businessRoute ? 'POST' : 'GET'
+        const methods = imageRoute ? ['GET', 'POST'] : [expectedMethod]
         if (request.method === 'OPTIONS') {
-          if (!origin || request.headers.get('Access-Control-Request-Method') !== expectedMethod) throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.')
+          if (!origin || !methods.includes(request.headers.get('Access-Control-Request-Method') ?? '')) throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.')
           const requested = (request.headers.get('Access-Control-Request-Headers') ?? '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean)
-          const allowedHeaders = businessRoute ? ['authorization', 'accept', 'content-type'] : ['authorization', 'accept']
+          const allowedHeaders = imageRoute ? ['authorization', 'accept', 'content-type', 'x-expected-image-id', 'x-expected-period-id']
+            : businessRoute ? ['authorization', 'accept', 'content-type'] : ['authorization', 'accept']
           if (requested.some((header) => !allowedHeaders.includes(header))) throw new HttpError(403, 'HEADERS_FORBIDDEN', 'Cabeceras no autorizadas.')
-          headers.set('Access-Control-Allow-Methods', `${expectedMethod}, OPTIONS`)
-          headers.set('Access-Control-Allow-Headers', businessRoute ? 'Authorization, Accept, Content-Type' : 'Authorization, Accept')
+          headers.set('Access-Control-Allow-Methods', `${methods.join(', ')}, OPTIONS`)
+          headers.set('Access-Control-Allow-Headers', imageRoute ? 'Authorization, Accept, Content-Type, X-Expected-Image-Id, X-Expected-Period-Id'
+            : businessRoute ? 'Authorization, Accept, Content-Type' : 'Authorization, Accept')
           headers.set('Access-Control-Max-Age', '600')
           headers.set('Vary', 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers')
           return new Response(null, { status: 204, headers })
         }
-        if (request.method !== expectedMethod) throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.')
+        if (!methods.includes(request.method)) throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.')
         if (path === '/health') return json({ status: 'ok' })
+        if (imageRoute) {
+          const profile = await currentProfile(request, env, upstream)
+          return await productImage(request, imageRoute[1].toLowerCase(), env.MEDIA, profile, configuration(env), upstream, headers)
+        }
         if (businessRoute) {
-          await currentProfile(request, env, upstream)
-          return json(await catalogRequest(request, configuration(env), upstream, path === '/api/catalog' ? 'catalog' : 'operations'))
+          const profile = await currentProfile(request, env, upstream)
+          return json(await catalogRequest(request, configuration(env), upstream, path === '/api/catalog' ? 'catalog' : 'operations', profile))
         }
         return json(await currentProfile(request, env, upstream))
       } catch (cause) {
         const error = cause instanceof HttpError || cause instanceof CatalogError ? cause : new HttpError(503, 'SERVICE_UNAVAILABLE', 'Servicio temporalmente no disponible.')
-        if (error.status === 405) headers.set('Allow', ['/api/catalog','/api/operations'].includes(new URL(request.url).pathname) ? 'POST, OPTIONS' : 'GET, OPTIONS')
+        if (error.status === 405) {
+          const path = new URL(request.url).pathname
+          headers.set('Allow', /^\/api\/products\/[0-9a-f-]{36}\/image$/i.test(path) ? 'GET, POST, OPTIONS'
+            : ['/api/catalog','/api/operations'].includes(path) ? 'POST, OPTIONS' : 'GET, OPTIONS')
+        }
         if (error.status === 401) headers.set('WWW-Authenticate', 'Bearer')
         // Never return/log upstream bodies, tokens, stack traces or credentials.
         return json({ error: { code: error.code, message: error.message } }, error.status)

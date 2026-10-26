@@ -1,10 +1,10 @@
-export const catalogActions = ['products.list', 'directories.list', 'inventory.history',
+export const catalogActions = ['products.list', 'directories.list', 'customers.search', 'media.read', 'media.attach', 'inventory.history',
   'product.save', 'inventory.adjust', 'customer.save', 'supplier.save'] as const
 export type CatalogAction = typeof catalogActions[number]
 export type Product = {
-  id: string; sku: string; name: string; price: string; purchase_price: string | null
-  category: string; barcode: string | null; minimum: number; supplier_id: string | null
-  active: boolean; version: number; stock: number
+  id: string; sku?: string; name: string; price: string; purchase_price?: string | null
+  category?: string; barcode?: string | null; minimum: number; supplier_id?: string | null
+  active: boolean; version: number; stock: number; image_id?: string | null
 }
 export type Contact = { id: string; name: string; email: string; phone: string; active: boolean; version: number }
 export type ProductPage = { rows: Product[]; total: number }

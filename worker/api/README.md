@@ -1,5 +1,9 @@
 # CAI Market API — perfil autenticado
 
+**Publicado (25/10/2026):** versión `84dea860-d785-4387-994b-9bac21126178`, 13 sondas aprobadas, Auth responde desde Cloudflare y JWT inválido produce 401. Bindings conservados; frontend aún sin publicar. Ver [resultado y límites de validación](../../docs/integracion/RESULTADO_WORKER_V1_20261025.md).
+
+**Preparación vigente (25/10/2026):** Supabase original ya tiene 001–008; Worker V1 verificado localmente y dry-run aprobado, todavía sin desplegar. Variables remotas, límites de validación, comandos exactos y versión de reversión en [PREPARACION_WORKER_V1_20261025](../../docs/integracion/PREPARACION_WORKER_V1_20261025.md). Las comprobaciones pendientes/contadores de la integración inicial que figuran más abajo son históricos.
+
 **Estado local V1:** también existen `/api/catalog` y `/api/operations`, con RPCs de catálogo, operaciones y reportes propuestas en 006–008. Auth/RPC usan ahora `redirect: manual` y rechazan 3xx por incompatibilidad comprobada de workerd con `error`. La guía vigente de funciones, configuración, límites y publicación está en [ENTREGA_V1](../../docs/ENTREGA_V1.md). Este documento conserva la revisión histórica de la integración inicial; no implica que los cambios estén publicados.
 
 Implementación local para el Worker **existente** `cai-market-api`, URL prevista `https://cai-market-api.brysof22.workers.dev`. No se creó otro Worker, no se desplegó código ni se aplicó SQL remoto. No utiliza Docker, contraseñas PostgreSQL ni `service_role`.

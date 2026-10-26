@@ -1,5 +1,11 @@
 # Revisión de aplicación de 006–008 — 24/10/2026
 
+**Estado vigente al 25/10/2026, 19:14 Colombia:** 006–008 ya aplicadas y registradas en Supabase original; auditoría aprobada y permisos originales restaurados. Ver [informe definitivo](RESULTADO_PRODUCCION_006_008_20261025.md). Las condiciones pendientes descritas debajo son históricas, no instrucciones para repetir migraciones.
+
+Actualización 25/10/2026: respaldo restaurado verificado y ensayo sobre copias PostgreSQL reales completados. Ver [ENSAYO_006_008_20261025.md](ENSAYO_006_008_20261025.md), con comparación de datos, historial individual y 12 escenarios concurrentes aprobados. Las carencias enumeradas abajo describen la revisión histórica del día 24; no sustituyen el resultado actualizado. La aplicación en producción sigue pendiente de verificación vigente y autorización explícita.
+
+Actualización de destino: ver [PRODUCCION_V1.md](PRODUCCION_V1.md). El usuario solicita producción sobre el proyecto original, sin Preview. La verificación de recuperación se hará localmente; no se creará otro proyecto alojado. Sigue siendo obligatorio disponer de respaldo restaurado, verificar las dependencias/saldos y obtener autorización antes de aplicar. El operador confirmó que aún no existe respaldo.
+
 ## Dictamen
 
 Revisión local favorable y aplicación en producción **condicionada**, todavía no habilitada. No se identificó un defecto SQL bloqueante reproducible en los tres archivos actuales. No se modificaron las migraciones. Faltan evidencias remotas de privilegios, ausencia completa de objetos parciales, respaldo restaurado y ensayo sobre PostgreSQL alojado con conexiones independientes. No ejecutar los pasos de aplicación de esta guía hasta recibir autorización.

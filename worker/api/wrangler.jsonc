@@ -8,6 +8,7 @@
     { "binding": "MEDIA", "bucket_name": "cai-market-media" }
   ],
   "vars": {
+    "SUPABASE_URL": "https://sauoekefntzxhqxycdgo.supabase.co",
     "ALLOWED_ORIGIN": "https://project-market.pages.dev"
   }
 }

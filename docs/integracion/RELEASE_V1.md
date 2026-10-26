@@ -1,5 +1,9 @@
 # Rama release/cai-market-v1
 
+**Preparación de Pages definitiva, 25/10/2026:** Worker y SQL ya publicados; frontend V1 probado con variables de producción y CSP. No se creó commit ni se integró main. Procedimiento vigente y límites: [PREPARACION_PAGES_V1_20261025](PREPARACION_PAGES_V1_20261025.md). El informe histórico siguiente no autoriza una Preview.
+
+Actualización 24/10/2026: el destino solicitado ahora es producción desde main y el Supabase original, sin Preview. El plan vigente es [PRODUCCION_V1.md](PRODUCCION_V1.md). El bloqueo de esta rama sigue evitando publicaciones automáticas ajenas a main y no afecta al build de producción. El texto siguiente documenta la decisión anterior.
+
 Esta rama guarda CAI Market V1 para revisión en GitHub. No autoriza aplicar migraciones ni desplegar el Worker de producción.
 
 Durante la preparación se consultó Pages en modo lectura: proyecto cai-market, dominio project-market.pages.dev, despliegue de producción desde main. La configuración descargada solo mostró variables de producción; no se verificó un entorno de Preview con Supabase y API aislados. El archivo de configuración descargado permanece en .cache, ignorado por Git, y no se publicó.

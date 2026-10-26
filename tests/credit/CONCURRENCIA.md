@@ -1,5 +1,7 @@
 # Escenarios multi-conexión preparados para un entorno aislado
 
+Actualización 25/10/2026: se ejecutaron y aprobaron 12 escenarios sobre PostgreSQL 17.11 real aislado, con dos conexiones y bloqueos comprobados para ventas, abonos, devoluciones y cierres de caja. Resultados, alcance y evidencias en [ENSAYO_006_008_20261025.md](../../docs/integracion/ENSAYO_006_008_20261025.md). Los escenarios de recordatorios y HTTP con JWT reales de este documento no se presentan como ejecutados por ese ensayo. El texto siguiente conserva las propuestas históricas previas a esa ejecución.
+
 No ejecutados: falta un proyecto alojado de pruebas autorizado. Esta etapa no utiliza Docker. Las pruebas PGlite no se presentan como evidencia de concurrencia real.
 
 Después de autorizar y aplicar las migraciones en un proyecto Supabase alojado de PRUEBAS, usar dos conexiones psql y datos ficticios. Crear identidades de prueba con Auth y perfiles activos; abrir caja y registrar producto de precio 100 y stock 10. No usar producción. Las conexiones financieras normales pasan por PostgREST con JWT original; para mantener bloqueos en psql, estos ejemplos requieren un administrador controlado capaz de `SET SESSION AUTHORIZATION authenticator`. No otorgar ese privilegio al Worker ni a un empleado. Si el administrador alojado no puede hacerlo, usar un PostgreSQL independiente desechable con ese bootstrap, o dos peticiones RPC simultáneas con JWT reales para probar contención sin pausas artificiales.

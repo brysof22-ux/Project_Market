@@ -5,7 +5,7 @@ test('despliegue conserva Worker, origen y bucket existentes sin acceso R2 remot
   const config = JSON.parse(readFileSync('worker/api/wrangler.jsonc', 'utf8'))
   expect(config.name).toBe('cai-market-api')
   expect(config.keep_vars).toBe(true)
-  expect(config.vars).toEqual({ ALLOWED_ORIGIN: 'https://project-market.pages.dev' })
+  expect(config.vars).toEqual({ SUPABASE_URL: 'https://sauoekefntzxhqxycdgo.supabase.co', ALLOWED_ORIGIN: 'https://project-market.pages.dev' })
   expect(config.r2_buckets).toEqual([{ binding: 'MEDIA', bucket_name: 'cai-market-media' }])
   expect(config.triggers).toBeUndefined()
   expect(config.vars.SUPABASE_PUBLISHABLE_KEY).toBeUndefined()

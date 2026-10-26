@@ -6,6 +6,7 @@ Implementación local de gestión comercial con React, TypeScript, Supabase Auth
 - [Entrega, funciones, límites, migraciones y lista de producción](docs/ENTREGA_V1.md).
 - [Diagnóstico aislado del TypeError de workerd](worker/auth-diagnostic/README.md).
 - [Estado y recuperación de la migración 005](docs/integracion/MIGRACION_005.md).
+- [Lote de producción preparado: proyecto original, main y autorizaciones pendientes](docs/integracion/PRODUCCION_V1.md).
 
 ## Funciones locales
 

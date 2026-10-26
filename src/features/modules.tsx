@@ -14,7 +14,7 @@ import {
   Panel,
   SectionTitle,
 } from '../components/common'
-import { CategoryChart, SalesChart } from '../components/charts'
+import { TopProductsChart, SalesChart } from '../components/charts'
 import { Button } from '../components/ui/button'
 import { customers, suppliers } from '../data/mock'
 import { PageHeading } from '../components/common'
@@ -54,7 +54,7 @@ export function Statistics() {
       </div>
       <div className="charts-grid">
         <SalesChart />
-        <CategoryChart />
+        <TopProductsChart />
       </div>
       <Panel className="insight-panel">
         <span className="metric-icon">
@@ -64,7 +64,7 @@ export function Statistics() {
           <h2>El sábado lidera las ventas</h2>
           <p className="muted">
             En la serie de ejemplo, el sábado registra $ 3.420.000. Alimentos
-            representa el 42 % de las ventas por categoría.
+            representa el 42 % de las ventas de productos.
           </p>
         </div>
         <Badge tone="neutral">Análisis de muestra</Badge>

@@ -1,3 +1,15 @@
+# CAI Market V1.2
+
+Gestión comercial con React/TypeScript, Supabase y Cloudflare Workers/Pages/R2.
+
+V1.2 elimina las categorías visibles y el pago con tarjeta, muestra productos más vendidos y permite transferencias sin referencia mediante los QR originales de Nequi y Llaves Bre-B. La administración de QR está restringida al administrador y las imágenes se sirven con autenticación desde R2 privado.
+
+La documentación vigente de cambios, permisos, migración incremental, pruebas y publicación está en [CAI Market V1.2](docs/integracion/CAI_MARKET_V1_2.md). Producción: [CAI Market](https://project-market.pages.dev).
+
+Los apartados siguientes se conservan como referencia histórica de V1.0; sus estados pendientes y la descripción de QR de demostración no representan V1.2.
+
+---
+
 # CAI Market 1.0
 
 Implementación local de gestión comercial con React, TypeScript, Supabase Auth/PostgreSQL y Cloudflare Workers/Pages. **Pendiente de revisión y validación alojada; no se declara lista para producción.** No se ejecutaron migraciones remotas, commits ni despliegues.

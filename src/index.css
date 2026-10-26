@@ -1927,7 +1927,7 @@ td.muted,
   .section-title h2 {
     font-size: 13px;
   }
-  .category-chart {
+  .top-products-chart {
     padding: 20px;
   }
   .donut-wrapper {
@@ -2376,3 +2376,11 @@ td.muted,
 .pos-product-price { font-size: 18px; color: var(--primary); }
 .contact-phone { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
 summary { cursor: pointer; padding-block: 10px; }
+
+.transfer-qr-panel { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; margin-block: 1rem; }
+.transfer-qr-image { display: grid; place-items: center; margin-block: 1rem; }
+.transfer-qr-image img { display: block; width: min(100%, 420px); height: auto; object-fit: contain; background: white; padding: 12px; border-radius: 8px; }
+
+.transfer-qr-expanded { width: 100%; height: auto; background: white; }
+
+.dialog-content:has(.transfer-qr-expanded) { width: min(900px, calc(100vw - 32px)); }

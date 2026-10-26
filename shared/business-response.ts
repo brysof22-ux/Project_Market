@@ -19,6 +19,8 @@ const debt = (row: Record<string, unknown>) => uuid(row.id) && uuid(row.charge_i
 
 export function validBusinessResponse(action: string, value: unknown): boolean {
   switch (action) {
+    case 'qr.list': return rows(value, (row) => ['nequi','breb'].includes(String(row.code)) && text(row.name) && (row.image_id === null || text(row.image_id)))
+    case 'qr.attach': return record(value) && text(value.image_id)
     case 'products.list':
       return record(value) && integer(value.total) && rows(value.rows, (row) => uuid(row.id) && (row.sku === undefined || text(row.sku)) && text(row.name)
         && money(row.price) && (row.purchase_price === undefined || nullableMoney(row.purchase_price)) && (row.category === undefined || text(row.category)) && integer(row.stock)

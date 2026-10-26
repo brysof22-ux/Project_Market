@@ -63,8 +63,8 @@ function DebtHistory({ chargeId, onChanged }: { chargeId: string; onChanged: () 
         }}><fieldset disabled={mutation.busy} className="business-fieldset">
           <p>El abono se aplica exclusivamente a esta compra, sin mezclar otras deudas de la persona.</p>
           <label className="form-label">Valor del abono<input name="amount" type="number" required min="0.01" max={debt.outstanding} step="0.01" /></label>
-          <label className="form-label">Método<select name="method_id" required>{bootstrap.data.methods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
-          <label className="form-label">Referencia (obligatoria fuera de efectivo)<input name="reference" maxLength={160} /></label>
+          <label className="form-label">Método<select name="method_id" required>{bootstrap.data.methods.filter((method) => method.code !== 'card').map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
+          <p className="muted">Verifica manualmente la recepción de las transferencias antes de registrar el abono.</p>
           <label className="checkbox-label"><input type="checkbox" required />Confirmo el valor recibido.</label>
         </fieldset>{mutation.error && <p role="alert">{mutation.error}</p>}<Button type="submit" disabled={mutation.busy}>{mutation.busy ? 'Registrando…' : 'Registrar abono recibido'}</Button></form>
           : bootstrap.data && <p>Abre tu propia caja desde <a href="#/pos">Punto de venta</a> para registrar abonos.</p>}

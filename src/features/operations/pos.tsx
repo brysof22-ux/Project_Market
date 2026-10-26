@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useCallback, type FormEvent } from 'react'
 import { EmptyState, PageHeading, Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
 import { QueryState, Pagination } from '../catalog/common'
 import { useCatalogQuery, useOperationsMutation, useOperationsQuery, useSearch } from '../catalog/hooks'
+import { TransferPicker } from '../payments/transfer-qr'
+import type { TransferQR } from '../../../shared/catalog'
 import { SalesHistory } from './sales'
 import { OwnCash } from './own-cash'
 import { ProductImage } from '../catalog/product-image'
@@ -13,11 +15,16 @@ import type { Product, ProductPage } from '../../../shared/catalog'
 import type { Bootstrap } from '../../../shared/operations'
 
 export function PointOfSale() {
+  const [transfer, setTransfer] = useState(false)
+  const [qr, setQR] = useState<TransferQR | null>(null)
+  const [qrReady, setQRReady] = useState(false)
   const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
   const [cart, setCart] = useState<Record<string, { product: Product; quantity: number }>>({})
   const [financed, setFinanced] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const selectQR = useCallback((method: TransferQR | null) => { setQR(method); setConfirmed(false) }, [])
+  const readyQR = useCallback((ready: boolean) => { setQRReady(ready); if (!ready) setConfirmed(false) }, [])
   const [revision, setRevision] = useState(0)
   const [notice, setNotice] = useState('')
   const [validation, setValidation] = useState('')
@@ -42,8 +49,8 @@ export function PointOfSale() {
     event.preventDefault()
     setValidation('')
     const values = new FormData(event.currentTarget)
-    const methods = bootstrap.data?.methods ?? []
-    const entered = methods.map((method) => ({ method_id: method.id, amount: String(values.get(`amount-${method.id}`) || '0'), reference: String(values.get(`reference-${method.id}`) || '') }))
+    const methods = (bootstrap.data?.methods ?? []).filter((method) => method.code !== 'card')
+    const entered = methods.map((method) => ({ method_id: method.id, amount: String(values.get(`amount-${method.id}`) || '0'), ...(method.code === 'transfer' ? { qr_code: qr?.code, qr_image_id: qr?.image_id, manually_verified: confirmed } : {}) }))
     if (entered.some((payment) => parseMinor(payment.amount) === null)) {
       setValidation('Escribe los pagos como valores positivos con un máximo de dos decimales.')
       return
@@ -54,10 +61,7 @@ export function PointOfSale() {
       setValidation('Los pagos deben coincidir con el total, o dejar un saldo autorizado a crédito.')
       return
     }
-    if (payments.some((payment) => methods.find((method) => method.id === payment.method_id)?.requires_reference && !payment.reference.trim())) {
-      setValidation('Registra la referencia de los pagos no efectivos.')
-      return
-    }
+    if (payments.some((payment) => methods.find((method) => method.id === payment.method_id)?.code === 'transfer') && (!qrReady || !qr?.image_id)) { setValidation('Carga y revisa el QR antes de confirmar la transferencia.'); return }
     if (await mutation.run('sale.confirm', {
       session_id: bootstrap.data?.session?.id, customer_id: values.get('customer_id') || null,
       buyer_name: values.get('buyer_name') || null,
@@ -67,7 +71,7 @@ export function PointOfSale() {
       expected_total: (totalMinor / 100).toFixed(2),
       finance: financed, lines: lines.map(({ product, quantity }) => ({ product_id: product.id, quantity })), payments,
     })) {
-      setCart({}); setFinanced(false); setConfirmed(false); setNotice('Venta registrada en la tienda.'); setRevision((value) => value + 1)
+      setCart({}); setTransfer(false); setFinanced(false); setConfirmed(false); setNotice('Venta registrada en la tienda.'); setRevision((value) => value + 1)
     }
   }
   return <>
@@ -94,15 +98,15 @@ export function PointOfSale() {
           <fieldset disabled={mutation.busy} className="business-fieldset">
             <label className="checkbox-label"><input type="checkbox" checked={financed} onChange={(event) => setFinanced(event.target.checked)} />Vender a crédito</label>
             {financed ? <CreditBuyer /> : <label className="form-label">Nombre del comprador (opcional)<input name="buyer_name" maxLength={160} placeholder="Consumidor final" /></label>}
-            {bootstrap.data?.methods.map((method) => <div key={method.id}>
-              <label className="form-label">Pago {method.name}<input name={`amount-${method.id}`} type="number" step="0.01" min="0" max="1000000000000" placeholder="0" /></label>
-              {method.requires_reference && <label className="form-label">Referencia {method.name}<input name={`reference-${method.id}`} maxLength={160} /></label>}
+            {bootstrap.data?.methods.filter((method) => method.code !== 'card').map((method) => <div key={method.id}>
+              <label className="form-label">Pago {method.name}<input name={`amount-${method.id}`} type="number" step="0.01" min="0" max="1000000000000" placeholder="0" onChange={(event) => { if (method.code === 'transfer') setTransfer(Number(event.target.value) > 0) }} /></label>
             </div>)}
+            {transfer && <TransferPicker onSelect={selectQR} onReady={readyQR} />}
             {financed && <p className="muted">Los pagos registrados son el abono inicial. El saldo restante se registra como deuda; no necesitas autorizar un cupo.</p>}
-            <label className="checkbox-label"><input name="confirm_payments" type="checkbox" required checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confirmo los pagos recibidos. Las transferencias y tarjetas se verifican manualmente.</label>
+            <label className="checkbox-label"><input name="confirm_payments" type="checkbox" required checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confirmo los pagos recibidos. Verifiqué manualmente la recepción de las transferencias.</label>
           </fieldset>
           {(validation || mutation.error) && <p role="alert">{validation || mutation.error}</p>}
-          <Button type="submit" disabled={!lines.length || !confirmed || mutation.busy || !bootstrap.data?.session}>{mutation.busy ? 'Registrando…' : 'Registrar venta'}</Button>
+          <Button type="submit" disabled={(transfer && !qrReady) || !lines.length || !confirmed || mutation.busy || !bootstrap.data?.session}>{mutation.busy ? 'Registrando…' : 'Registrar venta'}</Button>
         </form>
       </Panel>
     </div>

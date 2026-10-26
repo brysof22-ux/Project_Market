@@ -1,6 +1,9 @@
+import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { prepareImage } from '../../worker/api/src/image-format'
 import type { BrowserContext } from '@playwright/test'
 import { resetDatabase, staffQuery } from '../credit/fixture'
-import { createV11Database } from '../credit/v11-fixture'
+import { createV12Database as createV11Database } from '../credit/v12-fixture'
 import { createWorker, type Env } from '../../worker/api/src'
 import { products } from '../../src/data/mock'
 
@@ -24,6 +27,14 @@ export function businessFixture(context: BrowserContext, userId: string, role: s
     database ??= (async () => {
       const db = await createV11Database()
       await resetDatabase(db, true)
+      await db.exec("INSERT INTO pos.transfer_qr(code,name) VALUES('nequi','Nequi'),('breb','Llaves Bre-B') ON CONFLICT DO NOTHING; INSERT INTO pos.payment_methods(code,name,active,affects_cash,requires_reference) VALUES('card','Tarjeta',false,false,true) ON CONFLICT(code) DO NOTHING; UPDATE pos.payment_methods SET active=false WHERE code='card'; UPDATE pos.payment_methods SET requires_reference=false WHERE code='transfer';")
+      for (const [code, fixture] of [['nequi','billetera-demo'],['breb','banco-demo']]) {
+        const image = prepareImage(new Uint8Array(await readFile(`tests/fixtures/demo-qr/${fixture}.png`)), 'image/png')
+        const hash = createHash('sha256').update(image.bytes).digest('hex')
+        objects.set(`transfer-qr/${hash}`, image.bytes.slice().buffer)
+        await db.query('INSERT INTO pos.transfer_qr_media(image_id,object_key,mime,size,width,height,created_by) VALUES($1,$2,$3,$4,$5,$6,$7)',[hash,`transfer-qr/${hash}`,image.mime,image.bytes.length,image.width,image.height,'10000000-0000-0000-0000-000000000002'])
+        await db.query('UPDATE pos.transfer_qr SET image_id=$1 WHERE code=$2',[hash,code])
+      }
       await db.query('UPDATE pos.customers SET phone=$1 WHERE id=$2', ['3001234567', '20000000-0000-0000-0000-000000000001'])
       await db.query('UPDATE pos.profiles SET role=$1 WHERE id=$2', [role, userId])
       await db.exec('DELETE FROM pos.inventory_balances; DELETE FROM pos.products;')

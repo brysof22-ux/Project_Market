@@ -5,7 +5,7 @@ import { operationActions } from './operations'
 // This is a UI/HTTP boundary. PostgreSQL independently authorizes every RPC.
 const adminRoutes = ['dashboard', 'pos', 'inventario', 'estadisticas', 'contabilidad', 'clientes', 'proveedores', 'creditos', 'auditoria', 'configuracion']
 const cashierRoutes = ['pos', 'creditos']
-const cashierCatalog = ['products.list', 'customers.search', 'media.read']
+const cashierCatalog = ['qr.list', 'qr.read', 'products.list', 'customers.search', 'media.read']
 const cashierOperations = ['bootstrap', 'cash.open', 'cash.close', 'cash.list', 'cash.entries',
   'sale.confirm', 'sales.list', 'sales.detail',
   'debts.list', 'debt.detail', 'debt.receipt']

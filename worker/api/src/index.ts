@@ -1,6 +1,6 @@
 import { readStaffProfile } from '../../../shared/profile'
 import { catalogRequest, CatalogError } from './catalog'
-import { productImage } from './media'
+import { productImage, transferImage } from './media'
 
 export interface Env {
   SUPABASE_URL: string
@@ -134,18 +134,19 @@ export function createWorker(upstream: Fetcher = fetch) {
         if (origin !== null) headers.set('Access-Control-Allow-Origin', env.ALLOWED_ORIGIN)
         const path = new URL(request.url).pathname
         const businessRoute = path === '/api/catalog' || path === '/api/operations'
+        const qrRoute = /^\/api\/transfer-qr\/(nequi|breb)\/image$/.exec(path)
         const imageRoute = /^\/api\/products\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/image$/i.exec(path)
-        if (path !== '/api/me' && path !== '/health' && !businessRoute && !imageRoute) throw new HttpError(404, 'NOT_FOUND', 'Ruta no encontrada.')
+        if (path !== '/api/me' && path !== '/health' && !businessRoute && !imageRoute && !qrRoute) throw new HttpError(404, 'NOT_FOUND', 'Ruta no encontrada.')
         const expectedMethod = businessRoute ? 'POST' : 'GET'
-        const methods = imageRoute ? ['GET', 'POST'] : [expectedMethod]
+        const methods = (imageRoute || qrRoute) ? ['GET', 'POST'] : [expectedMethod]
         if (request.method === 'OPTIONS') {
           if (!origin || !methods.includes(request.headers.get('Access-Control-Request-Method') ?? '')) throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.')
           const requested = (request.headers.get('Access-Control-Request-Headers') ?? '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean)
-          const allowedHeaders = imageRoute ? ['authorization', 'accept', 'content-type', 'x-expected-image-id', 'x-expected-period-id']
+          const allowedHeaders = (imageRoute || qrRoute) ? ['authorization', 'accept', 'content-type', 'x-expected-image-id', 'x-expected-period-id']
             : businessRoute ? ['authorization', 'accept', 'content-type'] : ['authorization', 'accept']
           if (requested.some((header) => !allowedHeaders.includes(header))) throw new HttpError(403, 'HEADERS_FORBIDDEN', 'Cabeceras no autorizadas.')
           headers.set('Access-Control-Allow-Methods', `${methods.join(', ')}, OPTIONS`)
-          headers.set('Access-Control-Allow-Headers', imageRoute ? 'Authorization, Accept, Content-Type, X-Expected-Image-Id, X-Expected-Period-Id'
+          headers.set('Access-Control-Allow-Headers', (imageRoute || qrRoute) ? 'Authorization, Accept, Content-Type, X-Expected-Image-Id, X-Expected-Period-Id'
             : businessRoute ? 'Authorization, Accept, Content-Type' : 'Authorization, Accept')
           headers.set('Access-Control-Max-Age', '600')
           headers.set('Vary', 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers')
@@ -153,6 +154,10 @@ export function createWorker(upstream: Fetcher = fetch) {
         }
         if (!methods.includes(request.method)) throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.')
         if (path === '/health') return json({ status: 'ok' })
+        if (qrRoute) {
+          const profile = await currentProfile(request, env, upstream)
+          return await transferImage(request, qrRoute[1], env.MEDIA, profile, configuration(env), upstream, headers)
+        }
         if (imageRoute) {
           const profile = await currentProfile(request, env, upstream)
           return await productImage(request, imageRoute[1].toLowerCase(), env.MEDIA, profile, configuration(env), upstream, headers)
@@ -166,7 +171,7 @@ export function createWorker(upstream: Fetcher = fetch) {
         const error = cause instanceof HttpError || cause instanceof CatalogError ? cause : new HttpError(503, 'SERVICE_UNAVAILABLE', 'Servicio temporalmente no disponible.')
         if (error.status === 405) {
           const path = new URL(request.url).pathname
-          headers.set('Allow', /^\/api\/products\/[0-9a-f-]{36}\/image$/i.test(path) ? 'GET, POST, OPTIONS'
+          headers.set('Allow', /^\/api\/(?:products\/[0-9a-f-]{36}|transfer-qr\/(?:nequi|breb))\/image$/i.test(path) ? 'GET, POST, OPTIONS'
             : ['/api/catalog','/api/operations'].includes(path) ? 'POST, OPTIONS' : 'GET, OPTIONS')
         }
         if (error.status === 401) headers.set('WWW-Authenticate', 'Bearer')

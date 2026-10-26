@@ -6,6 +6,7 @@ import { useOperationsMutation, useOperationsQuery } from '../catalog/hooks'
 import { QueryState } from '../catalog/common'
 import { OperationForm } from './forms'
 import type { Bootstrap, StaffAccount, AuditEvent } from '../../../shared/operations'
+import { TransferSettings } from '../payments/transfer-qr'
 import { ResetOperation } from './reset'
 import { PeriodHistory } from './period-history'
 
@@ -50,6 +51,7 @@ export function Settings({ dark, toggleTheme }: { dark: boolean; toggleTheme: ()
         <label className="form-label">Ubicación<input name="address" maxLength={160} defaultValue={query.data.settings?.address ?? ''} /></label>
         <p>COP · America/Bogota</p>
       </OperationForm></Panel>}
+      <TransferSettings />
       <Users />
       <ResetOperation />
       <PeriodHistory />

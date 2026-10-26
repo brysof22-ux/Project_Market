@@ -17,15 +17,15 @@ export function SalesChart({ data = [] }: { data?: { day: string; actual: number
     </ResponsiveContainer></div>
   </Panel>
 }
-export function CategoryChart({ data = [] }: { data?: { category: string; total: string }[] }) {
-  return <Panel className="category-chart"><SectionTitle title="Ventas por categoría" subtitle="Ventas netas y devoluciones del período" />
-    <div className="area-chart" role="img" aria-label="Ventas netas por categoría"><ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data.map((row) => ({ name: row.category, amount: Number(row.total) }))} margin={{ top: 15, right: 10, left: 0, bottom: 0 }}>
+export function TopProductsChart({ data = [] }: { data?: { name: string; quantity: number; total: string }[] }) {
+  return <Panel className="top-products-chart"><SectionTitle title="Productos más vendidos" subtitle="Unidades netas del período" />
+    <div className="area-chart" role="img" aria-label="Productos más vendidos por unidades"><ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data.map((row) => ({ name: row.name, amount: row.quantity }))} margin={{ top: 15, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="name" tick={{ fill: 'var(--muted)', fontSize: 10 }} />
-        <YAxis width={70} tick={{ fill: 'var(--muted)', fontSize: 10 }} /><Tooltip contentStyle={tooltip} formatter={(value) => money(Number(value))} />
+        <YAxis width={70} tick={{ fill: 'var(--muted)', fontSize: 10 }} /><Tooltip contentStyle={tooltip} formatter={(value) => `${value} unidades`} />
         <Bar dataKey="amount" fill="#258367" isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer></div>
-    {!data.length && <p className="empty-state">Sin ventas por categoría en este período.</p>}
+    {!data.length && <p className="empty-state">Sin productos vendidos en este período.</p>}
   </Panel>
 }

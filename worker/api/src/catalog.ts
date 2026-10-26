@@ -82,7 +82,7 @@ export async function catalogRpc(request: Request, config: { url: string; key: s
         'PERIOD_REQUIRED', 'PERIOD_CHANGED', 'OPERATION_BUSY', 'OPERATION_IN_PROGRESS', 'OPEN_CASH_SESSIONS',
         'RECENT_AUTH_REQUIRED', 'CONFIRMATION_REQUIRED', 'IMAGE_CONFLICT', 'STOCK_CONFLICT',
         'CUSTOMER_REQUIRED', 'PHONE_REQUIRED', 'INVALID_DUE_DATE', 'CREDIT_IDENTITY_REQUIRED', 'DEBT_NOT_FOUND',
-        'RESET_INTENT_INVALID', 'RESET_PREVIEW_CHANGED', 'RESET_CONFIRMATION_REQUIRED'].includes(error.message)) code = error.message
+        'TRANSFER_CONFIRMATION_REQUIRED', 'RESET_INTENT_INVALID', 'RESET_PREVIEW_CHANGED', 'RESET_CONFIRMATION_REQUIRED'].includes(error.message)) code = error.message
       }
     } catch { /* Do not expose upstream error bodies. */ }
     if (response.status === 500 && code !== 'OPERATION_IN_PROGRESS') throw new CatalogError(503, 'CATALOG_UNAVAILABLE', 'El catálogo no está disponible.')

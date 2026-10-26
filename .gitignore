@@ -64,3 +64,6 @@ history_schema.sql
 history_data.sql
 .pgpass
 pgpass.conf
+
+# Original payment images contain private recipient data; publish only to private R2.
+/QR Transferencias/

@@ -78,6 +78,8 @@ export function createApiClient(options: {
       }
       if (response.status === 422) {
         const messages: Record<string, string> = {
+          TRANSFER_CONFIRMATION_REQUIRED: 'Verifica manualmente la recepción de la transferencia.',
+          IMAGE_CONFLICT: 'El QR cambió. Actualiza el QR y verifica el pago nuevamente.',
           VERSION_CONFLICT: 'Otro usuario modificó el registro. Actualiza la vista antes de editarlo.',
           INSUFFICIENT_STOCK: 'No hay existencias suficientes para esta operación.',
           INSUFFICIENT_CASH: 'El efectivo esperado de la caja no alcanza para esta salida.',
@@ -120,12 +122,11 @@ export function createApiClient(options: {
       }
       catch { throw new ApiError(502, 'INVALID_RESPONSE', 'La respuesta recibida no es válida.') }
   }
-  return {
-    async productImage(id: string, signal?: AbortSignal): Promise<Blob | null> {
-      if (!/^[0-9a-f-]{36}$/i.test(id)) throw new ApiError(400, 'INVALID_INPUT', 'Producto no válido.')
+  async function readMediaImage(kind: 'products' | 'transfer-qr', id: string, signal?: AbortSignal, version?: string): Promise<Blob | null> {
+      if (!(kind === 'products' ? /^[0-9a-f-]{36}$/i : /^(nequi|breb)$/).test(id)) throw new ApiError(400, 'INVALID_INPUT', 'Producto no válido.')
       const session = await options.getSession()
       if (!session?.access_token) throw new ApiError(401, 'UNAUTHORIZED', 'Inicia sesión de nuevo.')
-      const response = await (options.fetcher ?? fetch)(endpoint(`/api/products/${id}/image`), {
+      const response = await (options.fetcher ?? fetch)(endpoint(`/api/${kind}/${id}/image${version ? `?version=${encodeURIComponent(version)}` : ""}`), {
         headers: { Authorization: `Bearer ${session.access_token}` }, redirect: 'error', cache: 'no-store', credentials: 'omit',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
       })
@@ -136,25 +137,30 @@ export function createApiClient(options: {
       const blob = await response.blob()
       if (blob.size > 2 * 1024 * 1024) throw new ApiError(502, 'INVALID_RESPONSE', 'Fotografía demasiado grande.')
       return blob
-    },
-    async uploadProductImage(id: string, blob: Blob, expectedImage: string | null, period: string): Promise<{ image_id: string }> {
-      if (!/^[0-9a-f-]{36}$/i.test(id) || !['image/jpeg', 'image/png', 'image/webp'].includes(blob.type) || blob.size > 2 * 1024 * 1024) throw new ApiError(400, 'INVALID_IMAGE', 'Usa una imagen PNG, JPEG o WebP de hasta 2 MiB.')
+    }
+  async function uploadMediaImage(kind: 'products' | 'transfer-qr', id: string, blob: Blob, expectedImage: string | null, period?: string): Promise<{ image_id: string }> {
+      if (!(kind === 'products' ? /^[0-9a-f-]{36}$/i : /^(nequi|breb)$/).test(id) || !['image/jpeg', 'image/png', 'image/webp'].includes(blob.type) || blob.size > 2 * 1024 * 1024) throw new ApiError(400, 'INVALID_IMAGE', 'Usa una imagen PNG, JPEG o WebP de hasta 2 MiB.')
       const session = await options.getSession()
       if (!session?.access_token) throw new ApiError(401, 'UNAUTHORIZED', 'Inicia sesión de nuevo.')
       let response: Response
       try {
-        response = await (options.fetcher ?? fetch)(endpoint(`/api/products/${id}/image`), {
+        response = await (options.fetcher ?? fetch)(endpoint(`/api/${kind}/${id}/image`), {
           method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': blob.type,
-            'X-Expected-Image-Id': expectedImage ?? '', 'X-Expected-Period-Id': period }, body: blob,
+            'X-Expected-Image-Id': expectedImage ?? '', 'X-Expected-Period-Id': period ?? '' }, body: blob,
           redirect: 'error', cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(30_000),
         })
-      } catch { throw new ApiError(503, 'IMAGE_UNAVAILABLE', 'El producto se guardó; no se pudo adjuntar la fotografía. Puedes reintentar.') }
+      } catch { throw new ApiError(503, 'IMAGE_UNAVAILABLE', kind === 'products' ? 'El producto se guardó; no se pudo adjuntar la fotografía. Puedes reintentar.' : 'No se pudo actualizar el QR. Puedes reintentar.') }
       await checkMaintenance(response)
-      if (!response.ok) throw new ApiError(response.status, 'IMAGE_UNAVAILABLE', 'No se pudo adjuntar la fotografía. Actualiza el producto antes de reintentar.')
+      if (!response.ok) throw new ApiError(response.status, 'IMAGE_UNAVAILABLE', 'No se pudo adjuntar la imagen. Actualiza la vista antes de reintentar.')
       const result: unknown = await response.json()
-      if (!result || typeof result !== 'object' || !('image_id' in result) || typeof result.image_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(result.image_id)) throw new ApiError(502, 'INVALID_RESPONSE', 'No se pudo verificar la fotografía guardada.')
+      if (!result || typeof result !== 'object' || !('image_id' in result) || typeof result.image_id !== 'string' || !(kind === 'products' ? /^[0-9a-f-]{36}$/i : /^[a-f0-9]{64}$/).test(result.image_id)) throw new ApiError(502, 'INVALID_RESPONSE', 'No se pudo verificar la fotografía guardada.')
       return { image_id: result.image_id }
-    },
+    }
+  return {
+    productImage: (id: string, signal?: AbortSignal) => readMediaImage('products', id, signal),
+    transferQRImage: (code: string, signal?: AbortSignal, version?: string) => readMediaImage('transfer-qr', code, signal, version),
+    uploadProductImage: (id: string, blob: Blob, expectedImage: string | null, period: string) => uploadMediaImage('products', id, blob, expectedImage, period),
+    uploadTransferQRImage: (code: string, blob: Blob, expectedImage: string | null) => uploadMediaImage('transfer-qr', code, blob, expectedImage),
     catalog: <T>(action: CatalogAction, data: Record<string, unknown>, key?: string, signal?: AbortSignal) => command<T>('catalog', action, data, key, signal),
     operations: <T>(action: OperationAction, data: Record<string, unknown>, key?: string, signal?: AbortSignal) => command<T>('operations', action, data, key, signal),
     async getMe(signal?: AbortSignal): Promise<StaffProfile> {

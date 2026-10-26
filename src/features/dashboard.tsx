@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Banknote, DollarSign, Package, ShoppingBag } from 'lucide-react'
 import { Metric, PageHeading, Panel, SectionTitle } from '../components/common'
-import { SalesChart, CategoryChart } from '../components/charts'
+import { SalesChart, TopProductsChart } from '../components/charts'
 import { Button } from '../components/ui/button'
 import { useOperationsQuery } from './catalog/hooks'
 import { QueryState } from './catalog/common'
@@ -22,7 +22,7 @@ function period(range: string) {
 function exportReport(data: Report) {
   const escape = (value: string) => `"${(/^(?:\s*[=+\-@]|[\t\r])/.test(value) ? "'" + value : value).replaceAll('"', '""')}"`
   const rows = [['Desde', data.from], ['Hasta', data.to], ['Ventas brutas', data.gross_sales], ['Devoluciones', data.returns],
-    ['Ventas netas', data.net_sales], ['Recaudos netos', data.collections], ...data.categories.map((row) => [row.category, row.total])]
+    ['Ventas netas', data.net_sales], ['Recaudos netos', data.collections], ...data.top_products.map((row) => [row.name, String(row.quantity), row.total])]
   const url = URL.createObjectURL(new Blob(['\ufeff' + rows.map((row) => row.map(escape).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }))
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `reporte-${data.from}-${data.to}.csv`; anchor.click(); URL.revokeObjectURL(url)
 }
@@ -53,7 +53,7 @@ export function ReportView({ statistics = false }: { statistics?: boolean }) {
         <Metric label="Recaudos netos" value={money(Number(data.collections))} change="Pagos y abonos menos reintegros" note="No son nuevas ventas" icon={Banknote} trend="neutral" />
         <Metric label="Productos en catálogo" value={String(data.products)} change={`${data.low_stock} con stock bajo`} note="Existencias actuales" icon={Package} trend="neutral" />
       </div>
-      <div className="charts-grid"><SalesChart data={data.series.map((row) => ({ day: row.day, actual: Number(row.actual), previous: Number(row.previous) }))} /><CategoryChart data={data.categories} /></div>
+      <div className="charts-grid"><SalesChart data={data.series.map((row) => ({ day: row.day, actual: Number(row.actual), previous: Number(row.previous) }))} /><TopProductsChart data={data.top_products} /></div>
       <div className="settings-grid"><Panel><SectionTitle title="Control financiero" />
         <dl className="detail-list"><div><dt>Ventas brutas</dt><dd>{money(Number(data.gross_sales))}</dd></div><div><dt>Devoluciones</dt><dd>{money(Number(data.returns))}</dd></div>
           <div><dt>Gastos operativos</dt><dd>{data.expenses === null ? 'Acceso restringido' : money(Number(data.expenses))}</dd></div>
@@ -64,7 +64,6 @@ export function ReportView({ statistics = false }: { statistics?: boolean }) {
       </Panel><Panel><SectionTitle title="Productos más vendidos" /><ul>{data.top_products.map((row) => <li key={row.product_id}>{row.name} · {row.quantity} uds. netas · {money(Number(row.total))}</li>)}</ul>
         {!data.top_products.length && <p className="empty-state">Sin productos vendidos en este período.</p>}
         <SectionTitle title="Recaudos por método" /><ul>{data.methods.map((row) => <li key={row.code}>{row.name} · {money(Number(row.total))}</li>)}</ul>
-        {!data.limited && <><SectionTitle title="Utilidad bruta por categoría" /><ul>{data.categories.map((row) => <li key={row.category}>{row.category} · {row.gross_profit === null ? 'Sin costo histórico suficiente' : money(Number(row.gross_profit))}</li>)}</ul></>}
       </Panel></div>
       {!statistics && <SalesHistory />}
     </>}

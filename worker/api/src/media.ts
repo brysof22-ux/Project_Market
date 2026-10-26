@@ -116,3 +116,49 @@ export async function productImage(request: Request, productId: string, binding:
   }
   return Response.json({ image_id: imageId }, { status: 201, headers })
 }
+
+// Content-addressed objects deduplicate repeated uploads and never overwrite pixels.
+export async function transferImage(request: Request, code: string, binding: unknown,
+  profile: StaffProfile, config: { url: string; key: string }, upstream: Upstream, headers: Headers): Promise<Response> {
+  if (!['admin', 'cashier'].includes(profile.role) || (request.method === 'POST' && profile.role !== 'admin')) throw new CatalogError(403, 'FORBIDDEN', 'No tienes permiso para esta operación.')
+  const media = bucket(binding)
+  const read = async () => {
+    const value = await catalogRpc(request, config, upstream, 'catalog', 'qr.read', { code })
+    if (value === null) return null
+    const row = value as { image_id: string; object_key: string; mime: string; size: number }
+    if (!/^[a-f0-9]{64}$/.test(row.image_id) || row.object_key !== `transfer-qr/${row.image_id}` || !mimeTypes.includes(row.mime) || !Number.isInteger(row.size) || row.size < 1 || row.size > MAX_IMAGE_BYTES) return unavailable()
+    return row
+  }
+  const current = await read()
+  if (request.method === 'GET') {
+    if (!current) return notFound()
+    const version = new URL(request.url).searchParams.get('version')
+    if (version && version !== current.image_id) throw new CatalogError(409, 'IMAGE_CONFLICT', 'El QR cambió. Actualiza la vista.')
+    let object: MediaObject | null
+    try { object = await media.get(current.object_key) } catch { return unavailable() }
+    if (!object || object.size !== current.size) return notFound()
+    headers.set('Content-Type', current.mime)
+    headers.set('Content-Length', String(object.size))
+    headers.set('Content-Disposition', 'inline')
+    headers.set('Content-Security-Policy', "default-src 'none'; sandbox")
+    return new Response(object.body, { headers })
+  }
+  const expected = request.headers.get('X-Expected-Image-Id')
+  if (expected === null || (expected && !/^[a-f0-9]{64}$/.test(expected))) throw new CatalogError(400, 'INVALID_INPUT', 'Actualiza los QR antes de continuar.')
+  const image = await readImage(request)
+  if (image.width < 64 || image.height < 64) throw new CatalogError(415, 'INVALID_IMAGE', 'El QR debe medir al menos 64 píxeles por lado.')
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', image.bytes.slice().buffer)), value => value.toString(16).padStart(2, '0')).join('')
+  if (current?.image_id === hash) return Response.json({ image_id: hash }, { headers })
+  if ((current?.image_id ?? '') !== expected) throw new CatalogError(409, 'IMAGE_CONFLICT', 'El QR cambió. Actualiza la vista.')
+  const key = `transfer-qr/${hash}`
+  try {
+    const existing = await media.get(key)
+    if (!existing) {
+      const stored = await media.put(key, image.bytes.slice().buffer, { httpMetadata: { contentType: image.mime, cacheControl: 'private, no-store' }, onlyIf: { etagDoesNotMatch: '*' } })
+      if (!stored && !(await media.get(key))) return unavailable()
+    }
+  } catch { return unavailable() }
+  // Never delete on a timeout: attachment may already have committed.
+  await catalogRpc(request, config, upstream, 'catalog', 'qr.attach', { code, image_id: hash, object_key: key, mime: image.mime, size: image.bytes.length, width: image.width, height: image.height, expected_image_id: expected || null })
+  return Response.json({ image_id: hash }, { status: 201, headers })
+}

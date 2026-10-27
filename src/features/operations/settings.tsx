@@ -6,6 +6,7 @@ import { useOperationsMutation, useOperationsQuery } from '../catalog/hooks'
 import { QueryState } from '../catalog/common'
 import { OperationForm } from './forms'
 import type { Bootstrap, StaffAccount, AuditEvent } from '../../../shared/operations'
+import { WhatsAppSettings } from './whatsapp-settings'
 import { TransferSettings } from '../payments/transfer-qr'
 import { ResetOperation } from './reset'
 import { PeriodHistory } from './period-history'
@@ -52,6 +53,7 @@ export function Settings({ dark, toggleTheme }: { dark: boolean; toggleTheme: ()
         <p>COP · America/Bogota</p>
       </OperationForm></Panel>}
       <TransferSettings />
+      <WhatsAppSettings />
       <Users />
       <ResetOperation />
       <PeriodHistory />

@@ -5,7 +5,7 @@ const number = (value: unknown): value is number => typeof value === 'number' &&
 const integer = (value: unknown) => number(value) && Number.isInteger(value)
 const text = (value: unknown): value is string => typeof value === 'string'
 const uuid = (value: unknown) => text(value) && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
-const money = (value: unknown) => text(value) && /^-?\d+(?:\.\d{1,2}0*)?$/.test(value) && Number.isFinite(Number(value))
+const money = (value: unknown) => text(value) && /^-?\d+(?:\.\d{1,6}0*)?$/.test(value) && Number.isFinite(Number(value))
 const nullableMoney = (value: unknown) => value === null || money(value)
 const rows = (value: unknown, valid: (row: Record<string, unknown>) => boolean) => Array.isArray(value) && value.every((row) => record(row) && valid(row))
 const contact = (row: Record<string, unknown>) => uuid(row.id) && text(row.name) && text(row.email) && text(row.phone) && typeof row.active === 'boolean' && integer(row.version)
@@ -19,6 +19,8 @@ const debt = (row: Record<string, unknown>) => uuid(row.id) && uuid(row.charge_i
 
 export function validBusinessResponse(action: string, value: unknown): boolean {
   switch (action) {
+    case 'whatsapp.status': return record(value) && record(value.settings) && ['enabled','purchases','receipts','reminders'].every(key=>typeof value.settings === 'object' && value.settings !== null && typeof (value.settings as Record<string,unknown>)[key]==='boolean') && record(value.counts) && rows(value.jobs,row=>uuid(row.id)&&text(row.status)) && rows(value.contacts,row=>uuid(row.id)&&text(row.name)&&typeof row.consented==='boolean')
+    case 'whatsapp.settings': case 'whatsapp.contact': case 'whatsapp.test': case 'whatsapp.retry': return record(value)&&uuid(value.id)
     case 'qr.list': return rows(value, (row) => ['nequi','breb'].includes(String(row.code)) && text(row.name) && (row.image_id === null || text(row.image_id)))
     case 'qr.attach': return record(value) && text(value.image_id)
     case 'products.list':
@@ -72,6 +74,12 @@ export function validBusinessResponse(action: string, value: unknown): boolean {
         && rows(value.top_products, (row) => uuid(row.product_id) && text(row.name) && integer(row.quantity) && money(row.total))
         && rows(value.categories, (row) => text(row.category) && money(row.total) && nullableMoney(row.gross_profit))
         && rows(value.methods, (row) => text(row.name) && text(row.code) && money(row.total))
+        && (value.financial === undefined || (record(value.financial)
+          && ['cogs','net_profit','inventory_value','gross_margin'].every(key=>nullableMoney((value.financial as Record<string,unknown>)[key]))
+          && ['cash_received','transfers_received','cash_on_hand'].every(key=>money((value.financial as Record<string,unknown>)[key]))
+          && rows(value.financial.trend,row=>text(row.day)&&money(row.sales)&&nullableMoney(row.net_profit)&&nullableMoney(row.gross_profit)&&money(row.expenses)&&money(row.receivable))
+          && rows(value.financial.profitable_products,row=>uuid(row.product_id)&&text(row.name)&&nullableMoney(row.profit))
+          && rows(value.financial.periods,row=>text(row.period)&&money(row.sales)&&money(row.expenses))))
     case 'sale.confirm': return record(value) && uuid(value.sale_id) && money(value.total) && money(value.received) && money(value.financed)
     case 'credit.limit': return record(value) && uuid(value.account_id) && money(value.authorized_limit)
     case 'credit.receipt': return record(value) && uuid(value.receipt_id) && money(value.outstanding)
@@ -80,13 +88,13 @@ export function validBusinessResponse(action: string, value: unknown): boolean {
     case 'debt.detail': return record(value) && debt(value) && rows(value.receipts, (row) => uuid(row.id) && money(row.amount) && text(row.received_at) && text(row.method) && (row.reference === null || text(row.reference)))
     case 'reset.preview': return record(value) && uuid(value.intent_id) && uuid(value.period_id) && text(value.expires_at)
       && ['sales','debts','stock','open_sessions'].every((key) => integer(value[key])) && money(value.outstanding)
-    case 'reset.confirm': return record(value) && uuid(value.period_id) && uuid(value.previous_period_id)
+    case 'reset.confirm': return record(value) && uuid(value.period_id) && (value.destructive === true || uuid(value.previous_period_id))
     case 'periods.list': return rows(value, (row) => uuid(row.id) && text(row.opened_at) && (row.closed_at === null || text(row.closed_at)) && (row.reason === null || text(row.reason)) && (row.closing_snapshot === null || record(row.closing_snapshot)))
     case 'periods.detail': return record(value) && uuid(value.period_id)
       && record(value.totals) && ['sales','debts','stock'].every((key) => integer((value.totals as Record<string, unknown>)[key]))
       && rows(value.sales, (row) => uuid(row.id) && integer(row.number) && (row.buyer_name === null || text(row.buyer_name)) && money(row.total) && text(row.created_at))
       && rows(value.debts, debt) && rows(value.stock, (row) => uuid(row.product_id) && integer(row.quantity))
-    case 'product.save': case 'customer.save': case 'supplier.save': case 'inventory.adjust':
+    case 'inventory.receive': case 'product.save': case 'customer.save': case 'supplier.save': case 'inventory.adjust':
     case 'cash.open': case 'cash.move': case 'cash.close': case 'sale.return': case 'user.save': case 'settings.save':
       return record(value) && uuid(value.id)
     default: return false

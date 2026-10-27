@@ -1,4 +1,4 @@
-export const operationActions = ['bootstrap', 'cash.list', 'cash.entries', 'sales.list', 'sales.detail',
+export const operationActions = ['whatsapp.status', 'whatsapp.settings', 'whatsapp.contact', 'whatsapp.test', 'whatsapp.retry', 'bootstrap', 'cash.list', 'cash.entries', 'sales.list', 'sales.detail',
   'credits.list', 'credit.history', 'users.list', 'audit.list', 'cash.open', 'cash.move', 'cash.close',
   'sale.confirm', 'sale.return', 'credit.limit', 'credit.receipt', 'user.save', 'settings.save', 'report',
   'debts.list', 'debt.detail', 'debt.receipt', 'reset.preview', 'reset.confirm', 'periods.list', 'periods.detail'] as const
@@ -23,7 +23,21 @@ export type SalesPage = { total: number; rows: { id: string; number: number; cre
 export type CreditAccount = { id: string; customer_id: string; name: string; authorized_limit: number; outstanding: number; available: number; overdue: number }
 export type StaffAccount = { id: string; display_name: string; role: 'admin' | 'supervisor' | 'cashier'; active: boolean; can_credit: boolean; can_expenses: boolean }
 export type AuditEvent = { id: number; actor_id: string; actor_name: string; action: string; entity_id: string; created_at: string }
+export type FinancialReport = {
+ cogs: string|null; net_profit: string|null; cash_received:string; transfers_received:string; cash_on_hand:string
+ inventory_value:string|null; unknown_inventory_costs:number; gross_margin:string|null
+ profitable_products:{product_id:string;name:string;profit:string|null}[]
+ trend:{day:string;sales:string;gross_profit:string|null;net_profit:string|null;expenses:string;receivable:string}[]
+ periods:{period:string;sales:string;expenses:string}[]
+}
+export type WhatsAppStatus = {
+ settings:{enabled:boolean;purchases:boolean;receipts:boolean;reminders:boolean;days_before:number;connection_state:string;connected_number?:string|null;last_connection:string|null;last_success:string|null;last_error:string|null}
+ counts:{pending:number;sent:number;failed:number}
+ jobs:{id:string;kind:string;status:string;attempts:number;error_code:string|null;created_at:string;sent_at:string|null}[]
+ contacts:{id:string;name:string;phone:string;consented:boolean}[]
+}
 export type Report = {
+  financial?: FinancialReport
   from: string; to: string; limited: boolean; gross_sales: string; returns: string; net_sales: string; transactions: number
   previous_sales: string; gross_profit: string | null; unknown_cost_items: number; expenses: string | null
   collections: string; cash_income: string | null; outstanding: string | null; products: number; low_stock: number

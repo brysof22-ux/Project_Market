@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/button'
 import { useOperationsQuery } from '../catalog/hooks'
 import { QueryState } from '../catalog/common'
 import { AmountField, OperationForm } from './forms'
+import { ReportView } from '../dashboard'
 import { money } from '../../lib/utils'
 import type { Bootstrap, CashSession } from '../../../shared/operations'
 
@@ -11,14 +12,16 @@ export function Accounting() {
   const bootstrap = useOperationsQuery<Bootstrap>('bootstrap', {})
   const [offset, setOffset] = useState(0)
   const history = useOperationsQuery<CashSession[]>('cash.list', { limit: 20, offset })
+  const [revision,setRevision]=useState(0)
   const [notice, setNotice] = useState('')
   const [entries, setEntries] = useState<string | null>(null)
-  const done = () => { setNotice('Operación de caja registrada.'); bootstrap.refresh(); history.refresh() }
+  const done = () => { setRevision(value=>value+1); setNotice('Operación de caja registrada.'); bootstrap.refresh(); history.refresh() }
   const session = bootstrap.data?.session
   return <>
     <PageHeading title="Contabilidad" subtitle="Caja y control financiero operativo. No constituye contabilidad tributaria.">
       <Button variant="outline" onClick={() => { bootstrap.refresh(); history.refresh() }}>Actualizar caja</Button>
     </PageHeading>
+    <ReportView embedded revision={revision}/>
     {notice && <p role="status">{notice}</p>}
     <QueryState {...bootstrap} retry={bootstrap.refresh} />
     {bootstrap.data && <div className="settings-grid">

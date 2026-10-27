@@ -1,0 +1,60 @@
+import {test,expect} from './fixtures/auth'
+
+test('inventario calcula costo COP, suma stock, conserva mínimo y previsualiza WebP',async({page})=>{
+ await page.goto('/#/inventario')
+ await page.getByRole('button',{name:'Nuevo producto',exact:true}).click()
+ const dialog=page.getByRole('dialog')
+ await dialog.getByLabel('Nombre',{exact:true}).fill('Producto V1.3')
+ await dialog.getByLabel('Precio de venta',{exact:true}).fill('1.500,00')
+ await dialog.getByLabel('Cantidad a ingresar',{exact:true}).fill('48')
+ await dialog.getByLabel('Precio total de compra',{exact:true}).fill('20.173')
+ await expect(dialog.getByLabel('Precio de compra unitario',{exact:true})).toHaveValue('420,270833')
+ await expect(dialog.getByLabel('Cantidad disponible resultante',{exact:true})).toHaveValue('48')
+ await expect(dialog.getByLabel('Stock mínimo',{exact:true})).toHaveValue('5')
+ await dialog.getByLabel('Stock mínimo',{exact:true}).fill('9')
+ await dialog.getByLabel('Fotografía del producto',{exact:true}).setInputFiles('tests/fixtures/qr-demo.jpg')
+ await expect(dialog.getByRole('img',{name:'Vista previa de fotografía optimizada'})).toBeVisible()
+ const uploadPromise=page.waitForRequest(r=>r.url().includes('/api/products/')&&r.method()==='POST')
+ await dialog.getByRole('button',{name:'Guardar producto',exact:true}).click()
+ const upload=await uploadPromise;expect(upload.headers()['content-type']).toBe('image/webp')
+ expect(upload.postDataBuffer()!.length).toBeLessThan(200*1024)
+ await expect(page.getByRole('dialog')).toHaveCount(0)
+ await expect(page.locator('tbody tr').filter({hasText:'Producto V1.3'})).toContainText('48 unidades')
+ await page.getByRole('button',{name:'Mover Producto V1.3',exact:true}).click()
+ await page.getByLabel('Cantidad a ingresar',{exact:true}).fill('20')
+ await page.getByLabel('Precio total de compra',{exact:true}).fill('10.000')
+ await expect(page.getByLabel('Cantidad disponible resultante',{exact:true})).toHaveValue('68')
+ await page.getByRole('button',{name:'Registrar reabastecimiento',exact:true}).click()
+ await expect(page.getByRole('dialog')).toHaveCount(0)
+ await page.getByRole('button',{name:'Editar Producto V1.3',exact:true}).click()
+ await expect(page.getByLabel('Stock mínimo',{exact:true})).toHaveValue('9')
+ await expect(page.getByLabel('Cantidad actual',{exact:true})).toHaveValue('68')
+})
+test('optimización JPEG y PNG mantiene proporción y no amplía imágenes pequeñas',async({page})=>{
+ await page.goto('/#/inventario')
+ const results=await page.evaluate(async()=>{
+  const modulePath='/src/features/catalog/product-photo.ts'
+  const {prepareProductImage}=await import(modulePath)
+  const output=[]
+  for(const [mime,width,height] of [['image/jpeg',3000,2000],['image/png',2000,3000],['image/png',200,100]] as const){
+   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;canvas.getContext('2d')!.fillRect(0,0,width,height)
+   const blob=await new Promise<Blob>(resolve=>canvas.toBlob(v=>resolve(v!),mime))
+   const optimized=await prepareProductImage(new File([blob],'fixture',{type:mime}))
+   const image=await createImageBitmap(optimized)
+   output.push({width:image.width,height:image.height,type:optimized.type,size:optimized.size});image.close()
+  }
+  return output
+ })
+ expect(results).toEqual([{width:1200,height:800,type:'image/webp',size:expect.any(Number)},{width:1000,height:1500,type:'image/webp',size:expect.any(Number)},{width:200,height:100,type:'image/webp',size:expect.any(Number)}])
+ for(const result of results)expect(result.size).toBeLessThan(200*1024)
+})
+test('contabilidad presenta indicadores y filtros completos, WhatsApp desactivado sin conexión',async({page})=>{
+ await page.goto('/#/contabilidad')
+ for(const name of ['Costo de productos vendidos','Utilidad neta estimada','Valor del inventario','Margen bruto'])await expect(page.getByText(name,{exact:true})).toBeVisible()
+ await page.getByRole('combobox',{name:'Período de indicadores'}).selectOption('custom')
+ await expect(page.getByLabel('Desde',{exact:true})).toBeVisible();await expect(page.getByLabel('Hasta',{exact:true})).toBeVisible()
+ await page.goto('/#/configuracion')
+ await expect(page.getByRole('heading',{name:'WhatsApp',exact:true})).toBeVisible()
+ await expect(page.getByLabel('Activar notificaciones de WhatsApp',{exact:true})).toBeDisabled()
+ await expect(page.getByText('Sin configurar',{exact:true})).toBeVisible()
+})

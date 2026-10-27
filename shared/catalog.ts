@@ -1,4 +1,4 @@
-export const catalogActions = ['qr.list', 'qr.read', 'qr.attach', 'products.list', 'directories.list', 'customers.search', 'media.read', 'media.attach', 'inventory.history',
+export const catalogActions = ['inventory.receive', 'qr.list', 'qr.read', 'qr.attach', 'products.list', 'directories.list', 'customers.search', 'media.read', 'media.attach', 'inventory.history',
   'product.save', 'inventory.adjust', 'customer.save', 'supplier.save'] as const
 export type CatalogAction = typeof catalogActions[number]
 export type Product = {

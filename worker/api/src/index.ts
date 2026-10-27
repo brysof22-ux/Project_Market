@@ -1,8 +1,9 @@
+import {runWhatsApp,type WhatsAppEnv} from './whatsapp'
 import { readStaffProfile } from '../../../shared/profile'
 import { catalogRequest, CatalogError } from './catalog'
 import { productImage, transferImage } from './media'
 
-export interface Env {
+export interface Env extends WhatsAppEnv {
   SUPABASE_URL: string
   SUPABASE_PUBLISHABLE_KEY: string
   ALLOWED_ORIGIN: string
@@ -120,6 +121,7 @@ async function currentProfile(request: Request, env: Env, upstream: Fetcher) {
 
 export function createWorker(upstream: Fetcher = fetch) {
   return {
+    async scheduled(_event:unknown,env:Env,context:{waitUntil:(task:Promise<unknown>)=>void}) { context.waitUntil(runWhatsApp(env,configuration(env),upstream)) },
     async fetch(request: Request, env: Env): Promise<Response> {
       const origin = request.headers.get('Origin')
       const headers = new Headers({ 'Cache-Control': 'no-store', 'Vary': 'Origin', 'X-Content-Type-Options': 'nosniff' })
@@ -164,7 +166,7 @@ export function createWorker(upstream: Fetcher = fetch) {
         }
         if (businessRoute) {
           const profile = await currentProfile(request, env, upstream)
-          return json(await catalogRequest(request, configuration(env), upstream, path === '/api/catalog' ? 'catalog' : 'operations', profile))
+          return json(await catalogRequest(request, configuration(env), upstream, path === '/api/catalog' ? 'catalog' : 'operations', profile, env))
         }
         return json(await currentProfile(request, env, upstream))
       } catch (cause) {

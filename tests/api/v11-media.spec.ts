@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { deflateSync } from 'node:zlib'
 import { readFile } from 'node:fs/promises'
+import {readFileSync} from 'node:fs'
 import { createWorker, type Env } from '../../worker/api/src'
 import { prepareImage, MAX_IMAGE_BYTES } from '../../worker/api/src/image-format'
 import type { MediaBucket } from '../../worker/api/src/media'
@@ -10,6 +11,7 @@ const product = '30000000-0000-0000-0000-000000000001'
 const period = '70000000-0000-0000-0000-000000000001'
 const secret = 'DO_NOT_LEAK_UPSTREAM_TOKEN_OR_EXCEPTION'
 const token = 'fake.payload.signature'
+const webp=new Uint8Array(readFileSync('tests/fixtures/qr-demo.webp'))
 const envBase = { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fake', ALLOWED_ORIGIN: 'https://project-market.pages.dev' }
 
 function crc32(bytes: Uint8Array) {
@@ -32,11 +34,12 @@ function png(width = 1, text?: string) {
     ...(text ? [chunk('tEXt', Buffer.from(`Comment\0${text}`))] : []), chunk('IDAT', deflateSync(Buffer.from([0, 0, 0, 0]))), chunk('IEND', Buffer.alloc(0))])
 }
 
-function fixture(role = 'admin', options: { putFailure?: boolean; attachFailure?: boolean; lostCommit?: boolean } = {}) {
+function fixture(role = 'admin', options: { putFailure?: boolean; attachFailure?: boolean; attachRejected?:boolean; lostCommit?: boolean } = {}) {
   const objects = new Map<string, Uint8Array>()
   let metadata: Record<string, unknown> | null = null
   const actions: string[] = [], putKeys: string[] = []
   const bucket: MediaBucket = {
+    async delete(key){objects.delete(key)},
     async get(key) {
       const bytes = objects.get(key)
       return bytes ? { body: new Response(bytes.slice().buffer).body!, size: bytes.length, etag: 'opaque-etag' } : null
@@ -62,16 +65,17 @@ function fixture(role = 'admin', options: { putFailure?: boolean; attachFailure?
     if (body.p_action === 'media.read') return Response.json(metadata)
     expect(body.p_action).toBe('media.attach')
     expect(body.p_data.expected_period).toBe(period)
-    if (!options.attachFailure || options.lostCommit) metadata = body.p_data
+    if ((!options.attachFailure && !options.attachRejected) || options.lostCommit) metadata = body.p_data
+    if (options.attachRejected) return Response.json({message:'IMAGE_CONFLICT'},{status:409})
     if (options.attachFailure || options.lostCommit) return Response.json({ message: secret }, { status: 500 })
     return Response.json({ image_id: body.p_data.image_id })
   })
   return { api, env, objects, actions, putKeys }
 }
 
-function request(method = 'POST', body: Uint8Array = png(), extra: Record<string, string> = {}) {
+function request(method = 'POST', body: Uint8Array = webp, extra: Record<string, string> = {}) {
   return new Request(`https://api.test/api/products/${product}/image`, { method,
-    headers: { Authorization: `Bearer ${token}`, Origin: envBase.ALLOWED_ORIGIN, 'Content-Type': 'image/png',
+    headers: { Authorization: `Bearer ${token}`, Origin: envBase.ALLOWED_ORIGIN, 'Content-Type': 'image/webp',
       'X-Expected-Image-Id': '', 'X-Expected-Period-Id': period, ...extra },
     ...(method === 'POST' ? { body: Uint8Array.from(body).buffer } : {}),
   })
@@ -79,7 +83,7 @@ function request(method = 'POST', body: Uint8Array = png(), extra: Record<string
 
 test('fotografía privada: carga sanitizada, CAS, lectura autenticada y sin URLs/tokens', async () => {
   const { api, env, objects, putKeys } = fixture()
-  const uploaded = await api.fetch(request('POST', png(1, secret)), env)
+  const uploaded = await api.fetch(request('POST', webp), env)
   expect(uploaded.status).toBe(201)
   const data = await uploaded.json()
   expect(data).toEqual({ image_id: expect.stringMatching(/^[0-9a-f-]{36}$/) })
@@ -87,11 +91,11 @@ test('fotografía privada: carga sanitizada, CAS, lectura autenticada y sin URLs
   expect(Buffer.from(objects.get(putKeys[0])!).toString()).not.toContain(secret)
   const downloaded = await api.fetch(request('GET'), env)
   expect(downloaded.status).toBe(200)
-  expect(downloaded.headers.get('Content-Type')).toBe('image/png')
+  expect(downloaded.headers.get('Content-Type')).toBe('image/webp')
   expect(downloaded.headers.get('X-Content-Type-Options')).toBe('nosniff')
   expect(downloaded.headers.get('Cache-Control')).toBe('no-store')
   expect(downloaded.headers.get('Access-Control-Allow-Origin')).toBe(env.ALLOWED_ORIGIN)
-  expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(prepareImage(png(), 'image/png').bytes)
+  expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(prepareImage(webp, 'image/webp').bytes)
   const noAuth = await api.fetch(new Request(request('GET'), { headers: {} }), env)
   expect(noAuth.status).toBe(401)
 })
@@ -120,6 +124,7 @@ test('conflicto CAS no almacena ni modifica la fotografía anterior', async () =
 })
 
 for (const [name, bytes, headers, status] of [
+  ['PNG no optimizado', png(), { 'Content-Type':'image/png' },415],
   ['SVG', Buffer.from('<svg onload="alert(1)"/>'), { 'Content-Type': 'image/svg+xml' }, 415],
   ['HTML MIME falso', Buffer.from('<html>not an image</html>'), {}, 415],
   ['PNG truncado', png().subarray(0, 30), {}, 415],
@@ -193,3 +198,10 @@ for (const [path, mime] of [['tests/fixtures/qr-demo.jpg', 'image/jpeg'], ['test
     expect(() => prepareImage(source.subarray(0, 15), mime)).toThrow()
   })
 }
+
+test('rechazo definitivo de asociación elimina sólo el objeto nuevo no referenciado',async()=>{
+ const {api,env,objects}=fixture('admin',{attachRejected:true})
+ const response=await api.fetch(request(),env)
+ expect(response.status).toBe(422)
+ expect(objects.size).toBe(0)
+})

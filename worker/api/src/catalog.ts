@@ -2,6 +2,7 @@ import { catalogActions } from '../../../shared/catalog'
 import { operationActions } from '../../../shared/operations'
 import { canPerform } from '../../../shared/permissions'
 import type { StaffProfile } from '../../../shared/profile'
+import {refreshEvolutionHealth,type WhatsAppEnv} from './whatsapp'
 import { recentlyAuthenticated } from './recent-auth'
 
 export class CatalogError extends Error {
@@ -9,7 +10,7 @@ export class CatalogError extends Error {
 }
 
 export async function catalogRequest(request: Request, config: { url: string; key: string },
-  upstream: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>, section: 'catalog' | 'operations', profile: StaffProfile) {
+  upstream: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>, section: 'catalog' | 'operations', profile: StaffProfile, integration?:WhatsAppEnv) {
   if (request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') {
     throw new CatalogError(415, 'JSON_REQUIRED', 'Envía la operación en formato JSON.')
   }
@@ -48,6 +49,10 @@ export async function catalogRequest(request: Request, config: { url: string; ke
   if (body.action === 'reset.confirm' && !recentlyAuthenticated(request, profile.id)) {
     throw new CatalogError(403, 'RECENT_AUTH_REQUIRED', 'Vuelve a autenticarte antes de reiniciar la operación.')
   }
+  if(integration && (body.action==='whatsapp.status' || (body.action==='whatsapp.settings' && (body.data as Record<string,unknown>).enabled===true))) {
+    const state=await refreshEvolutionHealth(integration,config,upstream)
+    if(body.action==='whatsapp.settings'&&state!=='open')throw new CatalogError(422,'WHATSAPP_NOT_READY','Conecta Evolution API antes de activar notificaciones.')
+  }
   return catalogRpc(request, config, upstream, section, body.action, body.data as Record<string, unknown>, typeof body.key === 'string' ? body.key : null)
 }
 
@@ -82,7 +87,7 @@ export async function catalogRpc(request: Request, config: { url: string; key: s
         'PERIOD_REQUIRED', 'PERIOD_CHANGED', 'OPERATION_BUSY', 'OPERATION_IN_PROGRESS', 'OPEN_CASH_SESSIONS',
         'RECENT_AUTH_REQUIRED', 'CONFIRMATION_REQUIRED', 'IMAGE_CONFLICT', 'STOCK_CONFLICT',
         'CUSTOMER_REQUIRED', 'PHONE_REQUIRED', 'INVALID_DUE_DATE', 'CREDIT_IDENTITY_REQUIRED', 'DEBT_NOT_FOUND',
-        'TRANSFER_CONFIRMATION_REQUIRED', 'RESET_INTENT_INVALID', 'RESET_PREVIEW_CHANGED', 'RESET_CONFIRMATION_REQUIRED'].includes(error.message)) code = error.message
+        'TRANSFER_CONFIRMATION_REQUIRED', 'INVALID_PURCHASE', 'WHATSAPP_NOT_READY', 'CONSENT_REQUIRED', 'INVALID_CONSENT', 'NOTIFICATION_NOT_RETRYABLE', 'NOTIFICATIONS_IN_PROGRESS', 'RESET_INTENT_INVALID', 'RESET_PREVIEW_CHANGED', 'RESET_CONFIRMATION_REQUIRED'].includes(error.message)) code = error.message
       }
     } catch { /* Do not expose upstream error bodies. */ }
     if (response.status === 500 && code !== 'OPERATION_IN_PROGRESS') throw new CatalogError(503, 'CATALOG_UNAVAILABLE', 'El catálogo no está disponible.')

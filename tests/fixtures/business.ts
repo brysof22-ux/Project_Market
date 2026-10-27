@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { prepareImage } from '../../worker/api/src/image-format'
 import type { BrowserContext } from '@playwright/test'
 import { resetDatabase, staffQuery } from '../credit/fixture'
-import { createV12Database as createV11Database } from '../credit/v12-fixture'
+import { createV13Database as createV11Database } from '../credit/v13-fixture'
 import { createWorker, type Env } from '../../worker/api/src'
 import { products } from '../../src/data/mock'
 
@@ -27,6 +27,7 @@ export function businessFixture(context: BrowserContext, userId: string, role: s
     database ??= (async () => {
       const db = await createV11Database()
       await resetDatabase(db, true)
+      await db.exec('INSERT INTO pos.whatsapp_settings(id) VALUES(true)')
       await db.exec("INSERT INTO pos.transfer_qr(code,name) VALUES('nequi','Nequi'),('breb','Llaves Bre-B') ON CONFLICT DO NOTHING; INSERT INTO pos.payment_methods(code,name,active,affects_cash,requires_reference) VALUES('card','Tarjeta',false,false,true) ON CONFLICT(code) DO NOTHING; UPDATE pos.payment_methods SET active=false WHERE code='card'; UPDATE pos.payment_methods SET requires_reference=false WHERE code='transfer';")
       for (const [code, fixture] of [['nequi','billetera-demo'],['breb','banco-demo']]) {
         const image = prepareImage(new Uint8Array(await readFile(`tests/fixtures/demo-qr/${fixture}.png`)), 'image/png')

@@ -5,10 +5,19 @@
   "workers_dev": true,
   "keep_vars": true,
   "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "cai-market-media" }
+    {
+      "binding": "MEDIA",
+      "bucket_name": "cai-market-media"
+    }
   ],
   "vars": {
     "SUPABASE_URL": "https://sauoekefntzxhqxycdgo.supabase.co",
-    "ALLOWED_ORIGIN": "https://project-market.pages.dev"
+    "ALLOWED_ORIGIN": "https://project-market.pages.dev",
+    "EVOLUTION_INSTANCE": "cai-market"
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
   }
 }

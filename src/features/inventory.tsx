@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Badge, EmptyState, PageHeading, Panel, SectionTitle } from '../components/common'
 import { Button } from '../components/ui/button'
 import { Dialog } from '../components/ui/dialog'
@@ -6,7 +6,8 @@ import { money } from '../lib/utils'
 import { useAuth } from './auth/context'
 import { useCatalogMutation, useCatalogQuery, useSearch } from './catalog/hooks'
 import { QueryState, Pagination } from './catalog/common'
-import { ContactPicker } from './catalog/contact-picker'
+import { PurchaseFields } from './catalog/purchase-fields'
+import { parseCOP, purchasePreview } from '../../shared/money'
 import { ProductImage } from './catalog/product-image'
 import { prepareProductImage } from './catalog/product-photo'
 import { api } from '../lib/api'
@@ -14,9 +15,11 @@ import { ApiError } from '../lib/api-client'
 import { useOperationPeriod } from './operations/period-context'
 import type { Product, ProductPage, StockMovement } from '../../shared/catalog'
 
-function ProductEditor({ product, done }: { product: Product | null; done: () => void }) {
+function ProductEditor({ product, done, replenish = false }: { product: Product | null; done: () => void; replenish?: boolean }) {
   const mutation = useCatalogMutation()
   const period = useOperationPeriod()
+  const [validation, setValidation] = useState('')
+  const preparation = useRef(0)
   const [photo, setPhoto] = useState<Blob | null>(null)
   const [photoError, setPhotoError] = useState('')
   const [savedId, setSavedId] = useState<string | null>(null)
@@ -25,11 +28,15 @@ function ProductEditor({ product, done }: { product: Product | null; done: () =>
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const values = Object.fromEntries(new FormData(event.currentTarget))
+    const preview = purchasePreview(String(values.incoming_quantity), String(values.purchase_total), product?.stock ?? 0)
+    const price = parseCOP(String(values.price))
+    if (!preview.valid || (replenish && preview.count === 0) || price === null || Number(price) <= 0) { setValidation('Revisa la cantidad y los precios en pesos colombianos.'); return }
+    setValidation('')
     const result = savedId ? { id: savedId } : await mutation.run('product.save', {
-      name: values.name, price: values.price, purchase_price: values.purchase_price || null,
+      name: values.name, price, incoming_quantity: preview.count, purchase_total: preview.total,
       ...(product ? { id: product.id, version: product.version } : {}),
       minimum: Number(values.minimum), active: product?.active ?? true,
-      quantity: Number(values.quantity), expected_stock: product?.stock ?? 0,
+
     })
     if (!result || typeof result.id !== 'string') return
     setSavedId(result.id)
@@ -44,40 +51,35 @@ function ProductEditor({ product, done }: { product: Product | null; done: () =>
   return <form className="settings-form" onSubmit={save}>
     <fieldset className="business-fieldset" disabled={mutation.busy || uploading || !!savedId}>
     <label className="form-label">Nombre<input name="name" required maxLength={160} pattern=".*\S.*" defaultValue={product?.name} /></label>
-    <label className="form-label">Precio de venta<input name="price" type="number" required min="0.01" step="0.01" defaultValue={product?.price} /></label>
-    <label className="form-label">Precio de compra<input name="purchase_price" type="number" min="0" step="0.01" defaultValue={product?.purchase_price ?? ''} /></label>
-    <label className="form-label">Cantidad disponible<input name="quantity" type="number" required min="0" max="1000000" step="1" defaultValue={product?.stock ?? 0} /></label>
-    <label className="form-label">Stock mínimo<input name="minimum" type="number" required min="0" max="1000000" step="1" defaultValue={product?.minimum ?? 0} /></label>
+    <label className="form-label">Precio de venta<input name="price" inputMode="decimal" required defaultValue={product?.price} /></label>
+    <PurchaseFields stock={product?.stock ?? 0} />
+    <label className="form-label">Stock mínimo<input name="minimum" type="number" required min="0" max="1000000" step="1" defaultValue={product?.minimum ?? 5} /></label>
     {product && <ProductImage product={product} />}
     <label className="form-label">Fotografía del producto<input type="file" accept="image/png,image/jpeg,image/webp" onChange={async (event) => {
+      const revision = ++preparation.current
       const file = event.currentTarget.files?.[0]
       setPhoto(null); setPhotoError(''); setPreparing(true)
       if (!file) { setPreparing(false); return }
-      try { setPhoto(await prepareProductImage(file)) }
-      catch (cause) { setPhotoError(cause instanceof Error ? cause.message : 'Fotografía no válida.') }
-      finally { setPreparing(false) }
-    }} /></label><p className="muted">PNG, JPEG o WebP · máximo 2 MiB y 4096 × 4096 píxeles.</p>
+      try { const optimized = await prepareProductImage(file); if (preparation.current === revision) setPhoto(optimized) }
+      catch (cause) { if (preparation.current === revision) setPhotoError(cause instanceof Error ? cause.message : 'Fotografía no válida.') }
+      finally { if (preparation.current === revision) setPreparing(false) }
+    }} /></label><p className="muted">JPG, PNG o WebP · original hasta 20 MiB. Se optimiza a WebP, máximo 1200 × 1500, buscando menos de 200 KB.</p>
+    {photo && <PhotoPreview blob={photo} />}
     </fieldset>
+    {validation && <p role="alert">{validation}</p>}
     {(mutation.error || photoError) && <p role="alert">{mutation.error || photoError}</p>}
     {savedId && photoError && <p>El producto ya se guardó. Reintentar solo adjunta la fotografía y no repite el ajuste de existencias.</p>}
-    <Button type="submit" disabled={mutation.busy || uploading || preparing || (!!photoError && !savedId)}>{mutation.busy || uploading || preparing ? 'Guardando…' : savedId ? 'Reintentar fotografía' : 'Guardar producto'}</Button>
+    <Button type="submit" disabled={mutation.busy || uploading || preparing || (!!photoError && !savedId)}>{mutation.busy || uploading || preparing ? 'Guardando…' : savedId ? 'Reintentar fotografía' : replenish ? 'Registrar reabastecimiento' : 'Guardar producto'}</Button>
   </form>
 }
 
 function StockEditor({ product, done }: { product: Product; done: () => void }) {
-  const mutation = useCatalogMutation()
-  return <form className="settings-form" onSubmit={async (event) => {
-    event.preventDefault()
-    const data = new FormData(event.currentTarget)
-    if (await mutation.run('inventory.adjust', { product_id: product.id, delta: Number(data.get('delta')), reason: data.get('reason'), supplier_id: data.get('supplier_id') || null })) done()
-  }}>
-    <p>Existencias actuales: {product.stock}. Usa una cantidad positiva para entrada o negativa para salida.</p>
-    <label className="form-label">Cantidad de movimiento<input name="delta" type="number" required min="-1000000" max="1000000" step="1" /></label>
-    <label className="form-label">Motivo<input name="reason" required pattern=".*\S.*" maxLength={500} /></label>
-    <ContactPicker supplier name="supplier_id" label="Proveedor" defaultId={product.supplier_id ?? ''} />
-    {mutation.error && <p role="alert">{mutation.error}</p>}
-    <Button disabled={mutation.busy} type="submit">{mutation.busy ? 'Guardando…' : 'Registrar movimiento'}</Button>
-  </form>
+  return <ProductEditor product={product} done={done} replenish />
+}
+function PhotoPreview({blob}:{blob:Blob}) {
+ const [image,setImage]=useState<{blob:Blob;url:string}|null>(null)
+ useEffect(()=>{const url=URL.createObjectURL(blob);void Promise.resolve().then(()=>setImage({blob,url}));return()=>URL.revokeObjectURL(url)},[blob])
+ return image?.blob===blob?<figure><img className="product-photo" src={image.url} alt="Vista previa de fotografía optimizada" /><figcaption>WebP · {Math.ceil(blob.size/1024)} KB</figcaption></figure>:null
 }
 
 function StockHistory({ product }: { product: Product }) {

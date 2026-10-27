@@ -1,3 +1,9 @@
+# CAI Market V1.3
+
+Inventario con costos ponderados, fotografías WebP optimizadas, panel financiero y reinicio destructivo disponible para administradores. WhatsApp tiene cola y controles implementados; permanece desactivado hasta resolver Docker, túnel y vinculación. Ver [estado y validación V1.3](docs/integracion/CAI_MARKET_V1_3.md).
+
+---
+
 # CAI Market V1.2
 
 Gestión comercial con React/TypeScript, Supabase y Cloudflare Workers/Pages/R2.

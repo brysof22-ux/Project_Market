@@ -37,8 +37,8 @@ export function ResetOperation() {
     finally { setBusy(false) }
   }
   return <Panel><SectionTitle title="Administración · Reiniciar operación" />
-    <p className="notice">Esta operación archiva las ventas, gastos, deudas y abonos del período actual y abre un período nuevo con todas las existencias en cero. Conserva productos, fotografías, precios, perfiles y usuarios.</p>
-    <p>Las deudas archivadas continúan en el historial: archivar no equivale a condonarlas. No se permite reiniciar con cajas abiertas ni operaciones concurrentes. No se borran físicamente registros financieros.</p>
+    <p className="notice">Elimina permanentemente todas las ventas, pagos, devoluciones, deudas, abonos, movimientos de caja y notificaciones comerciales de todos los períodos. No se archivan ni se respaldan. Conserva usuarios, clientes, proveedores, productos, fotos, precios, mínimos, métodos de pago, QR y configuración.</p>
+    <p>Las existencias quedan en cero y la siguiente venta será V-1. Esta acción es irreversible dentro de la aplicación. El borrado no elimina obligaciones de conservación de información que resulten aplicables.</p>
     <form className="settings-form" onSubmit={verify}>
       <label className="form-label">Confirma tu contraseña<input name="password" type="password" required autoComplete="current-password" disabled={busy || mutation.busy} /></label>
       <Button type="submit" variant="outline" disabled={busy || mutation.busy}>{busy ? 'Verificando identidad…' : 'Verificar identidad y revisar alcance'}</Button>
@@ -50,14 +50,14 @@ export function ResetOperation() {
       if (await mutation.run('reset.confirm', { intent_id: preview.intent_id, expected_period: preview.period_id,
         confirmation: data.get('confirmation'), reason: data.get('reason') })) window.location.reload()
     }}><fieldset disabled={mutation.busy} className="business-fieldset">
-      <p>Período: {preview.period_id}</p><p>Ventas: {preview.sales} · Deudas: {preview.debts} · Saldo por archivar: <strong>{money(Number(preview.outstanding))}</strong> · Existencias que pasarán a cero: <strong>{preview.stock}</strong> · Cajas abiertas: <strong>{preview.open_sessions}</strong></p>
+      <p>Período: {preview.period_id}</p><p>Ventas: {preview.sales} · Deudas: {preview.debts} · Saldo por eliminar: <strong>{money(Number(preview.outstanding))}</strong> · Existencias que pasarán a cero: <strong>{preview.stock}</strong> · Cajas abiertas: <strong>{preview.open_sessions}</strong></p>
       <p>Confirmación válida hasta {new Date(preview.expires_at).toLocaleTimeString('es-CO')}. Si los datos cambian, debes revisar el alcance nuevamente.</p>
-      {preview.open_sessions > 0 && <p role="alert">Cierra y resuelve las cajas abiertas antes de reiniciar.</p>}
+      {preview.open_sessions > 0 && <p role="alert">Las cajas abiertas también se eliminarán al confirmar.</p>}
       <label className="form-label">Motivo del reinicio<input name="reason" required minLength={5} maxLength={500} pattern=".*\S.*" /></label>
-      <label className="form-label">Escribe REINICIAR OPERACION<input name="confirmation" required pattern="REINICIAR OPERACION" autoComplete="off" /></label>
-      <label className="checkbox-label"><input type="checkbox" required />He revisado el alcance y confirmo iniciar un nuevo período con existencias en cero.</label>
+      <label className="form-label">Escribe ELIMINAR OPERACION<input name="confirmation" required pattern="ELIMINAR OPERACION" autoComplete="off" /></label>
+      <label className="checkbox-label"><input type="checkbox" required />He revisado el alcance y autorizo eliminar permanentemente la operación comercial.</label>
     </fieldset>{mutation.error && <p role="alert">{mutation.error}</p>}
-      <Button type="submit" disabled={mutation.busy || preview.open_sessions > 0}>{mutation.busy ? 'Reiniciando de forma atómica…' : 'Archivar período y reiniciar operación'}</Button>
+      <Button type="submit" disabled={mutation.busy}>{mutation.busy ? 'Reiniciando de forma atómica…' : 'Eliminar operación permanentemente'}</Button>
     </form>}
   </Panel>
 }

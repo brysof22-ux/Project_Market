@@ -69,6 +69,7 @@ export function PointOfSale() {
       customer_phone: financed ? values.get('customer_phone') : null,
       due_on: financed ? values.get('due_on') || null : null,
       expected_total: (totalMinor / 100).toFixed(2),
+      notification_consent: financed && values.get('notification_consent') === 'on',
       finance: financed, lines: lines.map(({ product, quantity }) => ({ product_id: product.id, quantity })), payments,
     })) {
       setCart({}); setTransfer(false); setFinanced(false); setConfirmed(false); setNotice('Venta registrada en la tienda.'); setRevision((value) => value + 1)
@@ -102,6 +103,7 @@ export function PointOfSale() {
               <label className="form-label">Pago {method.name}<input name={`amount-${method.id}`} type="number" step="0.01" min="0" max="1000000000000" placeholder="0" onChange={(event) => { if (method.code === 'transfer') setTransfer(Number(event.target.value) > 0) }} /></label>
             </div>)}
             {transfer && <TransferPicker onSelect={selectQR} onReady={readyQR} />}
+            {financed && <label className="checkbox-label"><input name="notification_consent" type="checkbox"/>El cliente autoriza avisos de esta compra, abonos y recordatorios por WhatsApp al número indicado</label>}
             {financed && <p className="muted">Los pagos registrados son el abono inicial. El saldo restante se registra como deuda; no necesitas autorizar un cupo.</p>}
             <label className="checkbox-label"><input name="confirm_payments" type="checkbox" required checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confirmo los pagos recibidos. Verifiqué manualmente la recepción de las transferencias.</label>
           </fieldset>

@@ -192,7 +192,9 @@ test('capturas de escritorio y consola limpia', async ({ page }) => {
     if (message.type() === 'error') errors.push(message.text())
   })
   await page.goto('/')
-  await expect(page.locator('.recharts-area')).toHaveCount(2)
+  await expect(page.locator('.recharts-area')).toHaveCount(4)
+  await expect(page.getByRole('img',{name:'Evolución de ganancias',exact:true})).toBeVisible()
+  await expect(page.getByRole('img',{name:'Evolución de cuentas por cobrar',exact:true})).toBeVisible()
   await page.getByRole('button', { name: 'Modo claro', exact: true }).click()
   await page.screenshot({
     path: 'test-results/dashboard-desktop.png',

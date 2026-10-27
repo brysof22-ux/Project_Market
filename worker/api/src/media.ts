@@ -4,6 +4,7 @@ import { MAX_IMAGE_BYTES, prepareImage } from './image-format'
 
 export type MediaObject = { body: ReadableStream<Uint8Array>; size: number; etag: string }
 export interface MediaBucket {
+  delete?(key:string):Promise<void>
   get(key: string): Promise<MediaObject | null>
   put(key: string, value: ArrayBuffer, options: {
     httpMetadata: { contentType: string; cacheControl: string }; onlyIf: { etagDoesNotMatch: string }
@@ -90,6 +91,7 @@ export async function productImage(request: Request, productId: string, binding:
   const current = metadata(await read(), productId)
   if ((current?.imageId ?? '') !== expectedImage) throw new CatalogError(409, 'IMAGE_CONFLICT', 'La fotografía cambió. Actualiza el producto.')
   const image = await readImage(request)
+  if (image.mime !== 'image/webp' || image.width > 1200 || image.height > 1500) throw new CatalogError(415, 'INVALID_IMAGE', 'Adjunta una fotografía optimizada WebP de hasta 1200 × 1500 píxeles.')
   const imageId = crypto.randomUUID()
   const key = `products/${productId}/${imageId}`
   let stored: { etag: string; size: number } | null
@@ -111,6 +113,9 @@ export async function productImage(request: Request, productId: string, binding:
     // for a later reference-aware cleanup, rather than risking data loss.
     try {
       if (metadata(await read(), productId)?.imageId === imageId) return Response.json({ image_id: imageId }, { headers })
+      // A definitive rejected SQL transaction cannot later attach this UUID.
+      // Ambiguous network/server failures retain the private object for reconciliation.
+      if (cause instanceof CatalogError && ![502,503].includes(cause.status) && media.delete) await media.delete(key)
     } catch { /* Keep the original normalized error, no upstream logging. */ }
     throw cause
   }

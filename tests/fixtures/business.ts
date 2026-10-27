@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { prepareImage } from '../../worker/api/src/image-format'
 import type { BrowserContext } from '@playwright/test'
 import { resetDatabase, staffQuery } from '../credit/fixture'
-import { createV14Database as createV11Database } from '../credit/v14-fixture'
+import { createResetFixDatabase as createV11Database } from '../credit/reset-fix-fixture'
 import { createWorker, type Env } from '../../worker/api/src'
 import { products } from '../../src/data/mock'
 

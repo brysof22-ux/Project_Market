@@ -76,6 +76,11 @@ export function createApiClient(options: {
         } catch (cause) { if (cause instanceof ApiError) throw cause }
         throw new ApiError(403, 'FORBIDDEN', 'No tienes permiso para esta operación.')
       }
+      if (action === 'reset.confirm' && response.status >= 500) {
+        const failure = await response.json().catch(() => null) as {error?:{code?:unknown}} | null
+        if (failure?.error?.code === 'RESET_INTERNAL_ERROR') throw new ApiError(response.status, 'RESET_INTERNAL_ERROR', 'El reinicio fue rechazado por un error interno. Contacta al administrador con el código RESET_INTERNAL_ERROR.')
+        throw new ApiError(response.status, 'RESET_RESULT_UNKNOWN', 'No se pudo confirmar el resultado. Conserva los datos de esta solicitud y reintenta la misma confirmación; no generes otro reinicio a ciegas.')
+      }
       if (response.status === 422) {
         const messages: Record<string, string> = {
           TRANSFER_CONFIRMATION_REQUIRED: 'Verifica manualmente la recepción de la transferencia.',
@@ -106,9 +111,9 @@ export function createApiClient(options: {
           STOCK_CONFLICT: 'Las existencias cambiaron mientras editabas. Actualiza el producto antes de repetir el conteo.',
           RESET_INTENT_EXPIRED: 'La confirmación venció. Verifica tu identidad y revisa el alcance otra vez.',
           RESET_SNAPSHOT_CHANGED: 'Los datos cambiaron. Verifica tu identidad y revisa el alcance otra vez.',
-          RESET_INTENT_INVALID: 'La confirmación venció o ya no corresponde a tu sesión. Verifica tu identidad y revisa el alcance otra vez.',
+          RESET_INTENT_INVALID: 'La confirmación no corresponde a tu sesión, ya fue utilizada o no es válida. Verifica tu identidad y revisa el alcance otra vez.',
           RESET_PREVIEW_CHANGED: 'Los datos cambiaron. Verifica tu identidad y revisa el alcance otra vez.',
-          RESET_CONFIRMATION_REQUIRED: 'Escribe exactamente ELIMINAR OPERACION para confirmar.',
+          RESET_CONFIRMATION_REQUIRED: 'Revisa la frase ELIMINAR OPERACION y el motivo, de 5 a 500 caracteres.',
           CREDIT_IDENTITY_REQUIRED: 'Para vender a crédito, indica nombre completo y teléfono o selecciona una persona existente.',
           DEBT_NOT_FOUND: 'Esta deuda ya no está disponible en el período activo. Actualiza la vista.',
           PRICE_CHANGED: 'Los precios cambiaron durante la venta. Actualiza los productos y revisa nuevamente el carrito y sus pagos.',

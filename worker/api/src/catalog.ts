@@ -68,13 +68,24 @@ export async function catalogRpc(request: Request, config: { url: string; key: s
         'Content-Type': 'application/json', 'Content-Profile': 'public', 'Accept-Profile': 'public' },
       body: JSON.stringify(action === 'report' ? { p_data: data } : { p_action: action, p_data: data, p_key: key }),
     })
-  } catch { throw new CatalogError(503, 'CATALOG_UNAVAILABLE', 'No se pudo consultar el catálogo.') }
+  } catch {
+    if (action === 'reset.confirm') throw new CatalogError(503, 'RESET_RESULT_UNKNOWN', 'No se pudo confirmar el resultado del reinicio. Reintenta únicamente la misma solicitud.');
+    throw new CatalogError(503, 'CATALOG_UNAVAILABLE', 'No se pudo consultar el catálogo.')
+  }
   if (response.status === 401) throw new CatalogError(401, 'UNAUTHORIZED', 'Tu sesión ya no es válida.')
-  if (response.status === 403) throw new CatalogError(403, 'FORBIDDEN', 'No tienes permiso para esta operación.')
+  if (response.status === 403) {
+    if (action === 'reset.confirm') {
+      const value = await response.clone().json().catch(() => null) as {message?:unknown}|null;
+      if (value?.message === 'RECENT_AUTH_REQUIRED') throw new CatalogError(403, 'RECENT_AUTH_REQUIRED', 'Confirma de nuevo tu identidad antes de reiniciar.');
+    }
+    throw new CatalogError(403, 'FORBIDDEN', 'No tienes permiso para esta operación.')
+  }
   if (response.status === 400 || response.status === 409 || response.status === 422 || response.status === 423 || response.status === 500) {
     let code = 'INVALID_OPERATION'
+    let sqlstate: string | null = null
     try {
       const error = await response.json() as { message?: unknown; code?: unknown }
+      if (typeof error.code === 'string' && /^[A-Z0-9]{5}$/.test(error.code)) sqlstate = error.code
       // PostgREST maps SQLSTATE 55P03 (NOWAIT row contention) to HTTP 500.
       // Preserve only this exact application code; unrelated 500 bodies stay private.
       if (response.status === 500) {
@@ -87,9 +98,14 @@ export async function catalogRpc(request: Request, config: { url: string; key: s
         'PERIOD_REQUIRED', 'PERIOD_CHANGED', 'OPERATION_BUSY', 'OPERATION_IN_PROGRESS', 'OPEN_CASH_SESSIONS',
         'RECENT_AUTH_REQUIRED', 'CONFIRMATION_REQUIRED', 'IMAGE_CONFLICT', 'STOCK_CONFLICT',
         'CUSTOMER_REQUIRED', 'PHONE_REQUIRED', 'INVALID_DUE_DATE', 'CREDIT_IDENTITY_REQUIRED', 'DEBT_NOT_FOUND',
-        'TRANSFER_CONFIRMATION_REQUIRED', 'INVALID_PURCHASE', 'WHATSAPP_NOT_READY', 'CONSENT_REQUIRED', 'INVALID_CONSENT', 'NOTIFICATION_NOT_RETRYABLE', 'NOTIFICATIONS_IN_PROGRESS', 'RESET_INTENT_INVALID', 'RESET_PREVIEW_CHANGED', 'RESET_CONFIRMATION_REQUIRED'].includes(error.message)) code = error.message
+        'TRANSFER_CONFIRMATION_REQUIRED', 'INVALID_PURCHASE', 'WHATSAPP_NOT_READY', 'CONSENT_REQUIRED', 'INVALID_CONSENT', 'NOTIFICATION_NOT_RETRYABLE', 'NOTIFICATIONS_IN_PROGRESS', 'RESET_INTENT_INVALID', 'RESET_INTENT_EXPIRED', 'RESET_PREVIEW_CHANGED', 'RESET_CONFIRMATION_REQUIRED'].includes(error.message)) code = error.message
       }
     } catch { /* Do not expose upstream error bodies. */ }
+    if (action === 'reset.confirm') {
+      // Log codes only: never request data, identity, SQL, tokens or upstream text.
+      console.warn(JSON.stringify({event:'reset_rpc_failure',upstream_status:response.status,sqlstate,code:code==='INVALID_OPERATION'?'RESET_INTERNAL_ERROR':code}))
+      if (code === 'INVALID_OPERATION') throw new CatalogError(500, 'RESET_INTERNAL_ERROR', 'El servidor rechazó el reinicio por un error interno.');
+    }
     if (response.status === 500 && code !== 'OPERATION_IN_PROGRESS') throw new CatalogError(503, 'CATALOG_UNAVAILABLE', 'El catálogo no está disponible.')
     throw new CatalogError(422, code, 'No se guardó la operación. Revisa los datos y actualiza la vista.')
   }

@@ -88,7 +88,7 @@ test('QR reemplazado en configuración se actualiza en abonos abiertos sin perde
   await imageReady(page,'Nequi')
   await page.getByRole('checkbox',{name:'Confirmo el valor recibido.',exact:true}).check()
   const initial=await page.getByRole('img',{name:'Código QR Nequi',exact:true}).getAttribute('src')
-  const settings=await context.newPage();await settings.goto('/#/configuracion')
+  const settings=await context.newPage();await settings.goto('/#/configuracion');await settings.getByRole('button',{name:'Ventas Métodos de pago y QR de transferencia'}).click()
   await settings.getByLabel('Reemplazar QR Nequi',{exact:true}).setInputFiles('tests/fixtures/qr-demo.jpg')
   await settings.getByRole('button',{name:'Guardar QR Nequi',exact:true}).click()
   await expect(page.getByRole('img',{name:'Código QR Nequi',exact:true})).not.toHaveAttribute('src',initial!)

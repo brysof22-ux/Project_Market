@@ -6,6 +6,7 @@ import { useAuth } from '../auth/context'
 import { useOperationsQuery } from '../catalog/hooks'
 import { QueryState, Pagination } from '../catalog/common'
 import { OperationForm } from './forms'
+import {businessTime} from '../../lib/business-format'
 import { money } from '../../lib/utils'
 import type { Bootstrap, SalesPage } from '../../../shared/operations'
 
@@ -23,15 +24,15 @@ export function SalesHistory({ revision = 0, customerId, title = 'Historial de v
     </Dialog>}
   </Panel>
 }
-type Detail = { id: string; total: number; items: { id: string; name_snapshot: string; quantity: number; unit_price: number }[]; payments: { id: string; amount: number; reference: string | null }[]; credit: { outstanding: number; due_on: string | null } | null; return: { reason: string; refund_amount: number; credit_reduction: number } | null }
-function SaleDetail({ id, returned }: { id: string; returned: () => void }) {
+type Detail = { id: string; number:number;created_at:string;customer?:string; total: number; items: { id: string; name_snapshot: string; quantity: number; unit_price: number }[]; payments: { id: string; amount: number; method?:string; reference: string | null }[]; credit: { outstanding: number; due_on: string | null } | null; return: { reason: string; refund_amount: number; credit_reduction: number } | null }
+export function SaleDetail({ id, returned }: { id: string; returned: () => void }) {
   const query = useOperationsQuery<Detail>('sales.detail', { id })
   const bootstrap = useOperationsQuery<Bootstrap>('bootstrap', {})
   const { profile } = useAuth()
   const detail = query.data
   return <><QueryState {...query} retry={query.refresh} />
-    {detail && <><p>Total original: <strong>{money(detail.total)}</strong></p><ul>{detail.items.map((item) => <li key={item.id}>{item.quantity} × {item.name_snapshot} · {money(item.unit_price)}</li>)}</ul>
-      <p>Pagos registrados: {money(detail.payments.reduce((sum, payment) => sum + payment.amount, 0))}</p>
+    {detail && <><h3>Venta V-{detail.number}</h3><p>{businessTime(detail.created_at)} · {detail.customer??'Consumidor final'}</p><p>Estado: {detail.return?'Devuelta':detail.credit&&detail.credit.outstanding>0?'Pendiente':'Completada'}</p><p>Total original: <strong>{money(detail.total)}</strong></p><ul>{detail.items.map((item) => <li key={item.id}>{item.quantity} × {item.name_snapshot} · {money(item.unit_price)}</li>)}</ul>
+      <ul>{detail.payments.map(payment=><li key={payment.id}>{payment.method??'Pago'} · {money(payment.amount)}</li>)}</ul><p>Pagos registrados: {money(detail.payments.reduce((sum, payment) => sum + payment.amount, 0))}</p>
       {detail.credit && <p>Saldo de crédito: {money(detail.credit.outstanding)} · {detail.credit.due_on ? `Vence: ${detail.credit.due_on}` : 'Sin vencimiento'}</p>}
       {detail.return ? <p>Devolución: {detail.return.reason} · Reintegro: {money(detail.return.refund_amount)} · Deuda cancelada: {money(detail.return.credit_reduction)}</p>
         : profile?.role === 'admin' && bootstrap.data?.session && <OperationForm action="sale.return" defaults={{ sale_id: id, session_id: bootstrap.data.session.id }} onDone={returned} label="Confirmar devolución completa">

@@ -32,7 +32,7 @@
   --surface: #fff;
   --surface-soft: #f8faf9;
   --foreground: #25332e;
-  --muted: #78867e;
+  --muted: #65736b;
   --border: #e8ece9;
   --primary: #1c7053;
   --primary-soft: #eaf3ee;
@@ -824,11 +824,6 @@ main {
 .category-legend strong span {
   color: var(--muted);
   font-weight: 400;
-}
-.dashboard-bottom {
-  display: grid;
-  grid-template-columns: minmax(0, 2.3fr) minmax(255px, 1fr);
-  gap: 21px;
 }
 .sales-table-panel {
   padding: 0;
@@ -1663,9 +1658,6 @@ td.muted,
   .metric-bottom {
     gap: 4px;
   }
-  .dashboard-bottom {
-    grid-template-columns: minmax(0, 1.7fr) minmax(245px, 1fr);
-  }
   .sales-table-panel th:nth-child(3),
   .sales-table-panel td:nth-child(3) {
     display: none;
@@ -1739,9 +1731,6 @@ td.muted,
   }
   .sales-table-panel {
     padding: 0;
-  }
-  .dashboard-bottom {
-    grid-template-columns: 1fr;
   }
   .inventory-alerts {
     display: grid;
@@ -1940,9 +1929,6 @@ td.muted,
   }
   .category-legend > div {
     font-size: 10px;
-  }
-  .dashboard-bottom {
-    gap: 17px;
   }
   .inventory-alerts {
     display: block;
@@ -2384,3 +2370,33 @@ summary { cursor: pointer; padding-block: 10px; }
 .transfer-qr-expanded { width: 100%; height: auto; background: white; }
 
 .dialog-content:has(.transfer-qr-expanded) { width: min(900px, calc(100vw - 32px)); }
+/* V1.4: task-based navigation, accessible metric help and compact summaries. */
+.metric-tooltip-wrapper { position: relative; min-width: 0; }
+.metric-tooltip-wrapper > .metric { height: 100%; }
+.metric-info { position: absolute; right: 18px; top: 17px; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--primary); background: var(--surface); cursor: pointer; }
+.metric-tooltip-wrapper .metric-icon { margin-right: 34px; }
+.metric-info:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.metric-tooltip { z-index: 100; width: min(320px, calc(100vw - 24px)); padding: 14px 16px; color: var(--foreground); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 30px #0002; font-size: 13px; line-height: 1.6; pointer-events: none; }
+.metric-tooltip p { margin-top: 6px; }
+.daily-summary { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 14px; margin: 18px 0; }
+.daily-summary > div { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); min-width: 0; }
+.daily-summary dt { color: var(--muted); font-size: 12px; }
+.daily-summary dd { margin-top: 6px; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.section-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.section-tabs button { min-height: 44px; padding: 10px 15px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); cursor: pointer; text-align: left; }
+.section-tabs button[aria-selected=true] { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+.settings-navigation { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-bottom: 24px; }
+.settings-group { display: flex; align-items: flex-start; gap: 12px; padding: 16px; min-width: 0; min-height: 86px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); text-align: left; cursor: pointer; }
+.settings-group svg { flex-shrink: 0; color: var(--primary); }
+.settings-group strong { display: block; font-size: 14px; }
+.settings-group small { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
+.settings-group[aria-pressed=true] { border-color: var(--primary); background: var(--primary-soft); }
+.settings-heading { font-size: 20px; margin: 20px 0; }
+.settings-content { display: grid; gap: 18px; }
+.danger-zone { border: 1px solid #bc6a56; border-radius: 12px; padding: 18px; }
+.danger-zone > h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.close-cash { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 10px; }
+.metric-tooltip-wrapper[data-state=negative] .metric > strong { color: #b95038; }
+@media(max-width:600px) { .daily-summary { grid-template-columns: 1fr 1fr; } .daily-summary dd { font-size: 15px; } .settings-navigation { grid-template-columns: 1fr; } .metric-info { min-width: 38px; min-height: 38px; top: 12px; } .section-tabs > button { flex: 1 1 45%; } }
+
+.metrics-grid > .metric-tooltip-wrapper:nth-child(-n+4) > .metric { border-top: 3px solid var(--primary); }

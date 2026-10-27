@@ -11,7 +11,7 @@ export function PaymentHistory() {
     <Panel className="payment-history">
       <SectionTitle
         title="Historial de pagos · Demo local"
-        subtitle="Ventas finalizadas en este navegador. No incluye datos reales ni las ventas ficticias del dashboard."
+        subtitle="Ventas finalizadas en este navegador. No incluye datos reales ni las ventas registradas en el servidor."
         action={<Badge tone="neutral">Sin conexión bancaria</Badge>}
       />
       <div className="payment-summary">

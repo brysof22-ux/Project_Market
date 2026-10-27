@@ -45,6 +45,7 @@ function useRemoteMutation<A extends CatalogAction | OperationAction>(section: '
       const result = section === 'catalog' ? await api.catalog<Record<string, unknown>>(action as CatalogAction, payload, pending.current.key)
         : await api.operations<Record<string, unknown>>(action as OperationAction, payload, pending.current.key)
       pending.current = null
+      window.dispatchEvent(new CustomEvent('cai:form-saved'))
       return result
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'No se pudo guardar la operación.')

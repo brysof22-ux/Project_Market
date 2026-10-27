@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { ArrowDownLeft, ArrowUpRight, type LucideIcon } from 'lucide-react'
+import {MetricTooltip} from './metric-tooltip'
 import { cn } from '../lib/utils'
 
 export function Panel({
@@ -46,6 +47,7 @@ export function Metric({
   icon: Icon,
   trend = 'up',
   note = 'vs. ayer',
+  description,
 }: {
   label: string
   value: string
@@ -53,8 +55,9 @@ export function Metric({
   icon: LucideIcon
   trend?: 'up' | 'down' | 'neutral'
   note?: string
+  description?: string
 }) {
-  return (
+  const content = (
     <Panel className="metric">
       <div className="metric-top">
         <span>{label}</span>
@@ -76,6 +79,7 @@ export function Metric({
       </div>
     </Panel>
   )
+  return description ? <MetricTooltip title={label} description={description} value={value} state={trend==='down'?'negative':trend==='up'?'positive':'neutral'}>{content}</MetricTooltip> : content
 }
 export function EmptyState({
   text = 'No hay resultados para esta búsqueda.',

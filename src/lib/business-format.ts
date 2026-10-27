@@ -1,0 +1,5 @@
+export const businessDate=(value:string|Date=new Date())=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value))
+export const businessTime=(value:string)=>new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',dateStyle:'short',timeStyle:'short'}).format(new Date(value))
+export function dateRange(range:string,day=businessDate()){const start=new Date(`${day}T12:00:00Z`);if(range==='week')start.setUTCDate(start.getUTCDate()-6);if(range==='month')start.setUTCDate(1);return {from:start.toISOString().slice(0,10),to:day}}
+export function downloadCSV(name:string,rows:(string|number|null|undefined)[][]){const cell=(v:unknown)=>{const s=String(v??'');return `"${(/^[\s]*[=+\-@]|^[\t\r]/.test(s)?"'"+s:s).replaceAll('"','""')}"`};const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(';')).join('\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url)}
+export const paymentLabel=(code:string)=>({cash:'Efectivo',transfer:'Transferencia',credit:'Crédito',card:'Tarjeta histórica'})[code]??code

@@ -5,7 +5,7 @@ import { recentlyAuthenticated } from '../../worker/api/src/recent-auth'
 
 const actor = '10000000-0000-0000-0000-000000000001'
 const env: Env = { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fake', ALLOWED_ORIGIN: 'https://project-market.pages.dev', MEDIA: {} }
-const routes = ['dashboard', 'pos', 'inventario', 'estadisticas', 'contabilidad', 'clientes', 'proveedores', 'creditos', 'auditoria', 'configuracion']
+const routes = ['pos', 'inventario', 'estadisticas', 'contabilidad', 'clientes', 'proveedores', 'creditos', 'auditoria', 'configuracion']
 const forbidden = [
   ['catalog', 'product.save'], ['catalog', 'inventory.adjust'], ['catalog', 'inventory.history'],
   ['catalog', 'customer.save'], ['catalog', 'supplier.save'], ['catalog', 'directories.list'], ['catalog', 'media.attach'],
@@ -18,7 +18,7 @@ const forbidden = [
 for (const role of ['admin', 'cashier', 'supervisor'] as const) {
   test(`navegación ${role}: permisos explícitos y Supervisor no hereda acceso`, () => {
     for (const route of routes) expect(canAccessRoute(role, route)).toBe(role === 'admin' || (role === 'cashier' && ['pos', 'creditos'].includes(route)))
-    expect(homeRoute(role)).toBe(role === 'admin' ? 'dashboard' : role === 'cashier' ? 'pos' : '')
+    expect(homeRoute(role)).toBe(role === 'admin' ? 'estadisticas' : role === 'cashier' ? 'pos' : '')
     expect(canAccessRoute(role, 'unknown')).toBe(false)
     expect(canPerform(role, 'operations', 'unknown')).toBe(false)
   })

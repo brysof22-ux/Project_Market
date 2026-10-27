@@ -12,7 +12,7 @@ export function WhatsAppSettings() {
   if(await mutation.run(action,data)){setNotice('Configuración o solicitud guardada.');query.refresh()}
  }
  const data=query.data
- return <Panel><SectionTitle title="WhatsApp" subtitle="Notificaciones con consentimiento; las ventas continúan si el servicio está desconectado."/>
+ return <Panel><SectionTitle title="Conexión y notificaciones" subtitle="Notificaciones con consentimiento; las ventas continúan si el servicio está desconectado."/>
  <QueryState {...query} retry={query.refresh}/><Button variant="outline" onClick={query.refresh}>Comprobar conexión de WhatsApp</Button>
  {notice&&<p role="status">{notice}</p>}{mutation.error&&<p role="alert">{mutation.error}</p>}
  {data&&<>
@@ -23,7 +23,7 @@ export function WhatsAppSettings() {
   {data.settings.last_error&&<p role="status">Último error: {data.settings.last_error}</p>}
   <p>Pendientes: {data.counts.pending} · Aceptadas por Evolution: {data.counts.sent} · Fallidas o inciertas: {data.counts.failed}</p>
   <p className="muted">Aceptar el envío en Evolution no confirma entrega ni lectura. Un resultado incierto no se reintenta automáticamente.</p>
-  <form key={JSON.stringify(data.settings)} className="settings-form" onSubmit={event=>{event.preventDefault();const values=new FormData(event.currentTarget);void run('whatsapp.settings',{enabled:values.has('enabled'),purchases:values.has('purchases'),receipts:values.has('receipts'),reminders:values.has('reminders'),days_before:Number(values.get('days_before'))})}}>
+  <form key={JSON.stringify(data.settings)} className="settings-form" onSubmit={event=>{event.preventDefault();const values=new FormData(event.currentTarget);void run('whatsapp.settings',{version:data.settings.version,enabled:values.has('enabled'),purchases:values.has('purchases'),receipts:values.has('receipts'),reminders:values.has('reminders'),days_before:Number(values.get('days_before'))})}}>
    <fieldset disabled={mutation.busy} className="business-fieldset">
     <label className="checkbox-label"><input name="enabled" type="checkbox" defaultChecked={data.settings.enabled} disabled={data.settings.connection_state!=='open'&&!data.settings.enabled}/>Activar notificaciones de WhatsApp</label>
     <label className="checkbox-label"><input name="purchases" type="checkbox" defaultChecked={data.settings.purchases}/>Confirmaciones de compras a crédito</label>
@@ -31,7 +31,7 @@ export function WhatsAppSettings() {
     <label className="checkbox-label"><input name="reminders" type="checkbox" defaultChecked={data.settings.reminders}/>Recordatorios de vencimiento</label>
     <label className="form-label">Días antes del vencimiento<input name="days_before" type="number" min="1" max="30" step="1" required defaultValue={data.settings.days_before}/></label>
     <p className="muted">También se recuerda el día de vencimiento. Sin vencimiento, sin consentimiento o con deuda pagada no se generan recordatorios. Se requiere una conexión verificada y al menos un contacto autorizado para activar.</p>
-   </fieldset><Button type="submit" disabled={mutation.busy}>Guardar preferencias de WhatsApp</Button>
+   </fieldset><Button type="submit" disabled={mutation.busy}>Guardar cambios de WhatsApp</Button>
   </form>
   <details><summary>Consentimiento de clientes</summary><form className="settings-form" onSubmit={event=>{event.preventDefault();const v=new FormData(event.currentTarget);void run('whatsapp.contact',{customer_id:v.get('customer_id'),granted:v.has('granted'),evidence:v.get('evidence')})}}>
    <label className="form-label">Cliente para autorización<select name="customer_id" required><option value="">Selecciona un cliente</option>{data.contacts.map(c=><option key={c.id} value={c.id}>{c.name} · {c.phone} · {c.consented?'Autorizado':'Sin autorización'}</option>)}</select></label>

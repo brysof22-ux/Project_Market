@@ -1,3 +1,9 @@
+# CAI Market V1.4
+
+Panel organizado por tarea: Estadísticas con ayuda y ventas del día, Contabilidad para cajas y movimientos, Configuración agrupada. Dashboard independiente eliminado. WhatsApp continúa desactivado. Ver [implementación y validación V1.4](docs/integracion/CAI_MARKET_V1_4.md).
+
+---
+
 # CAI Market V1.3
 
 Inventario con costos ponderados, fotografías WebP optimizadas, panel financiero y reinicio destructivo disponible para administradores. WhatsApp tiene cola y controles implementados; permanece desactivado hasta resolver Docker, túnel y vinculación. Ver [estado y validación V1.3](docs/integracion/CAI_MARKET_V1_3.md).

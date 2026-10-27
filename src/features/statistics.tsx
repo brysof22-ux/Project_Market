@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Banknote, DollarSign, Package, ShoppingBag } from 'lucide-react'
-import { Metric, PageHeading, Panel, SectionTitle } from '../components/common'
+import { Metric, PageHeading } from '../components/common'
 import { SalesChart, TopProductsChart } from '../components/charts'
 import { Button } from '../components/ui/button'
 import { useOperationsQuery } from './catalog/hooks'
 import { QueryState } from './catalog/common'
-import { SalesHistory } from './operations/sales'
+import { TodaySalesHistory } from './operations/today-sales'
 import { FinancialCharts, FinancialMetrics } from './operations/financial-report'
 import { money } from '../lib/utils'
 import type { Report } from '../../shared/operations'
@@ -28,22 +28,22 @@ function exportReport(data: Report) {
   const url = URL.createObjectURL(new Blob(['\ufeff' + rows.map((row) => row.map(escape).join(';')).join('\n')], { type: 'text/csv;charset=utf-8' }))
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `reporte-${data.from}-${data.to}.csv`; anchor.click(); URL.revokeObjectURL(url)
 }
-export function ReportView({ statistics = false, embedded = false, revision = 0 }: { statistics?: boolean; embedded?: boolean; revision?: number }) {
+export function Statistics() {
   const [range, setRange] = useState('week')
   const [customFrom,setCustomFrom]=useState(today())
   const [customTo,setCustomTo]=useState(today())
   const dates = range==='custom'?{from:customFrom,to:customTo}:period(range)
-  const query = useOperationsQuery<Report>('report', {...dates,revision})
+  const query = useOperationsQuery<Report>('report', dates)
   const data = query.data
   const comparison = data && Number(data.previous_sales) !== 0
     ? `${((Number(data.net_sales) / Number(data.previous_sales) - 1) * 100).toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`
     : 'Sin base de comparación'
   return <>
-    {!embedded && <PageHeading title={statistics ? 'Estadísticas' : 'Tu negocio, de un vistazo'} subtitle="Indicadores calculados desde las operaciones registradas, en horario de Bogotá.">
+    <PageHeading title="Estadísticas" subtitle="Indicadores calculados desde las operaciones registradas, en horario de Bogotá.">
       <Button variant="outline" disabled={!data} onClick={() => { if (data) exportReport(data) }}>Exportar reporte</Button>
       <Button asChild><a href="#/pos">Nueva venta</a></Button>
       <Button asChild variant="outline"><a href="#/inventario?stock=bajo">Revisar stock bajo</a></Button>
-    </PageHeading>}
+    </PageHeading>
     <div className="table-toolbar"><label className="form-label">Período de indicadores<select aria-label="Período de indicadores" value={range} onChange={(event) => setRange(event.target.value)}>
       <option value="today">Hoy</option><option value="week">Últimos 7 días</option><option value="last30">Últimos 30 días</option><option value="month">Mes actual</option><option value="custom">Rango personalizado</option>
     </select></label>{range==='custom'&&<><label className="form-label">Desde<input type="date" value={customFrom} max={customTo} onChange={event=>setCustomFrom(event.target.value)}/></label><label className="form-label">Hasta<input type="date" value={customTo} min={customFrom} onChange={event=>setCustomTo(event.target.value)}/></label></>}<Button variant="outline" onClick={query.refresh}>Actualizar indicadores</Button></div>
@@ -51,28 +51,16 @@ export function ReportView({ statistics = false, embedded = false, revision = 0 
     {data && <>
       {data.limited && <p className="notice">Vista limitada a tus ventas y recaudos. Los datos globales de cartera, gastos y utilidad requieren otro permiso.</p>}
       {data.financial ? <FinancialMetrics report={data}/> : <div className="metrics-grid">
-        <Metric label="Ventas netas del período" value={money(Number(data.net_sales))} change={comparison} note="vs. período anterior" icon={DollarSign}
+        <Metric label="Ventas netas del período" value={money(Number(data.net_sales))} description="Ventas del período después de devoluciones." change={comparison} note="vs. período anterior" icon={DollarSign}
           trend={Number(data.previous_sales) === 0 ? 'neutral' : Number(data.net_sales) >= Number(data.previous_sales) ? 'up' : 'down'} />
-        <Metric label="Transacciones" value={String(data.transactions)} change="Ventas registradas" note={`${data.from} a ${data.to}`} icon={ShoppingBag} trend="neutral" />
-        <Metric label="Recaudos netos" value={money(Number(data.collections))} change="Pagos y abonos menos reintegros" note="No son nuevas ventas" icon={Banknote} trend="neutral" />
-        <Metric label="Productos en catálogo" value={String(data.products)} change={`${data.low_stock} con stock bajo`} note="Existencias actuales" icon={Package} trend="neutral" />
+        <Metric label="Transacciones" value={String(data.transactions)} description="Número de ventas registradas en el período." change="Ventas registradas" note={`${data.from} a ${data.to}`} icon={ShoppingBag} trend="neutral" />
+        <Metric label="Recaudos netos" value={money(Number(data.collections))} description="Dinero recibido menos reintegros; no incluye créditos pendientes." change="Pagos y abonos menos reintegros" note="No son nuevas ventas" icon={Banknote} trend="neutral" />
+        <Metric label="Productos en catálogo" value={String(data.products)} description="Productos activos y alertas de stock mínimo." change={`${data.low_stock} con stock bajo`} note="Existencias actuales" icon={Package} trend="neutral" />
       </div>}
       <div className="charts-grid"><SalesChart data={data.series.map((row) => ({ day: row.day, actual: Number(row.actual), previous: Number(row.previous) }))} /><TopProductsChart data={data.top_products} /></div>
       <FinancialCharts report={data}/>
-      <div className="settings-grid"><Panel><SectionTitle title="Control financiero" />
-        <dl className="detail-list"><div><dt>Ventas brutas</dt><dd>{money(Number(data.gross_sales))}</dd></div><div><dt>Devoluciones</dt><dd>{money(Number(data.returns))}</dd></div>
-          <div><dt>Gastos operativos</dt><dd>{data.expenses === null ? 'Acceso restringido' : money(Number(data.expenses))}</dd></div>
-          <div><dt>Otros ingresos de caja</dt><dd>{data.cash_income === null ? 'Acceso restringido' : money(Number(data.cash_income))}</dd></div>
-          <div><dt>Cartera pendiente actual</dt><dd>{data.outstanding === null ? 'Acceso restringido' : money(Number(data.outstanding))}</dd></div>
-          <div><dt>Utilidad bruta estimada</dt><dd>{data.gross_profit === null ? 'No disponible con los datos o permisos actuales' : money(Number(data.gross_profit))}</dd></div></dl>
-        {data.unknown_cost_items > 0 && <p>Faltan costos históricos en {data.unknown_cost_items} líneas; no se estima su utilidad.</p>}
-      </Panel><Panel><SectionTitle title="Productos más vendidos" /><ul>{data.top_products.map((row) => <li key={row.product_id}>{row.name} · {row.quantity} uds. netas · {money(Number(row.total))}</li>)}</ul>
-        {!data.top_products.length && <p className="empty-state">Sin productos vendidos en este período.</p>}
-        <SectionTitle title="Recaudos por método" /><ul>{data.methods.map((row) => <li key={row.code}>{row.name} · {money(Number(row.total))}</li>)}</ul>
-      </Panel></div>
-      {!statistics && !embedded && <SalesHistory />}
+      <TodaySalesHistory />
     </>}
   </>
 }
-export function Dashboard() { return <ReportView /> }
-export function Statistics() { return <ReportView statistics /> }
+

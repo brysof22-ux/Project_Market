@@ -6,7 +6,7 @@ async function login(page: Page) {
   await page.getByLabel('Contraseña', { exact: true }).fill('test-password-not-real')
   await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click()
 }
-const dashboard = (page: Page) => page.getByRole('heading', { name: 'Tu negocio, de un vistazo' })
+const dashboard = (page: Page) => page.getByRole('heading', { name: 'Estadísticas' })
 const loginHeading = (page: Page) => page.getByRole('heading', { name: 'Bienvenido a tu tienda' })
 
 test('rutas privadas ocultas sin sesión y enlace profundo conservado al iniciar', async ({ page, context }) => {

@@ -94,7 +94,7 @@ function QREditor({ method }: { method: TransferQR }) {
       setBusy(true); setError(''); setNotice('')
       try {
         await api.uploadTransferQRImage(method.code, file, method.image_id)
-        setFile(null); setNotice('QR actualizado.'); form.reset(); notifyQRChange()
+        setFile(null); setNotice('QR actualizado.'); form.reset(); window.dispatchEvent(new CustomEvent('cai:form-saved',{detail:form})); notifyQRChange()
       } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo actualizar el QR.') }
       finally { setBusy(false) }
     }}>

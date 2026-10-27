@@ -43,7 +43,7 @@ test('pago mixto conserva centavos, persiste transferencia y solo efectivo entra
   await expect(page.getByRole('dialog')).toContainText('28.500')
   await page.keyboard.press('Escape')
   await page.goto('/#/contabilidad')
-  await expect(page.getByText('Efectivo esperado:')).toContainText('10.050,25')
+  await expect(page.locator('dl div').filter({has:page.getByText('Efectivo esperado',{exact:true})})).toContainText('10.050,25')
 })
 
 test('crédito, abono y devolución compensan saldo y preservan el historial original', async ({ page }) => {

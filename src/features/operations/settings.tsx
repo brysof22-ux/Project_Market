@@ -1,3 +1,5 @@
+import {useFormLeaveGuard} from './settings-guard'
+import {Store,ShoppingCart,Package,Wallet,MessageCircle,ShieldCheck,Database} from 'lucide-react'
 import { useState } from 'react'
 import { PageHeading, Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
@@ -39,26 +41,24 @@ function Users() {
     {editor && <UserForm key={editor.user?.id ?? 'new'} user={editor.user} done={() => { setEditor(null); query.refresh() }} />}
   </Panel>
 }
-export function Settings({ dark, toggleTheme }: { dark: boolean; toggleTheme: () => void }) {
-  const { profile } = useAuth()
-  const query = useOperationsQuery<Bootstrap>('bootstrap', {})
-  const [notice, setNotice] = useState('')
-  return <><PageHeading title="Configuración" subtitle="Preferencias de la tienda y acceso de empleados." />
-    <Panel><SectionTitle title="Apariencia" /><Button onClick={toggleTheme}>{dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}</Button></Panel>
-    <QueryState {...query} retry={query.refresh} />{notice && <p role="status">{notice}</p>}
-    {profile?.role === 'admin' && <>
-      {query.data && <Panel><SectionTitle title="Información del negocio" /><OperationForm action="settings.save" onDone={() => { setNotice('Configuración guardada.'); query.refresh() }}>
-        <label className="form-label">Nombre de la tienda<input name="name" required maxLength={80} pattern=".*\S.*" defaultValue={query.data.settings?.name ?? ''} /></label>
-        <label className="form-label">Ubicación<input name="address" maxLength={160} defaultValue={query.data.settings?.address ?? ''} /></label>
-        <p>COP · America/Bogota</p>
-      </OperationForm></Panel>}
-      <TransferSettings />
-      <WhatsAppSettings />
-      <Users />
-      <ResetOperation />
-      <PeriodHistory />
-    </>}
-  </>
+const settingGroups=[{id:'business',title:'Mi negocio',description:'Información comercial y apariencia',icon:Store},{id:'sales',title:'Ventas',description:'Métodos de pago y QR de transferencia',icon:ShoppingCart},{id:'inventory',title:'Inventario',description:'Productos, costos y stock mínimo',icon:Package},{id:'cash',title:'Caja y finanzas',description:'Apertura, cierre y movimientos',icon:Wallet},{id:'whatsapp',title:'WhatsApp',description:'Conexión, consentimiento y avisos',icon:MessageCircle},{id:'security',title:'Usuarios y seguridad',description:'Perfiles y permisos de acceso',icon:ShieldCheck},{id:'maintenance',title:'Datos y mantenimiento',description:'Períodos y operaciones avanzadas',icon:Database}] as const
+export function Settings({dark,toggleTheme}:{dark:boolean;toggleTheme:()=>void}) {
+ const {profile}=useAuth();const query=useOperationsQuery<Bootstrap>('bootstrap',{});const [group,setGroup]=useState<string>('business'),[notice,setNotice]=useState('');const guard=useFormLeaveGuard()
+ const selected=settingGroups.find(x=>x.id===group)!
+ return <div onChangeCapture={guard.onChangeCapture} onSubmitCapture={guard.onSubmitCapture}><PageHeading title="Configuración" subtitle="Encuentra los ajustes de tu negocio, organizados por tarea."/>
+ <div className="settings-navigation" aria-label="Grupos de configuración">{settingGroups.map(item=><button key={item.id} className="settings-group" aria-pressed={group===item.id} onClick={()=>{if(group!==item.id&&guard.approve()){setGroup(item.id);setNotice('')}}}><item.icon size={21}/><span><strong>{item.title}</strong><small>{item.description}</small></span></button>)}</div>
+ {guard.dirty&&<p role="status" className="notice">Tienes cambios sin guardar.</p>}{notice&&<p role="status">{notice}</p>}
+ <section aria-label={selected.title} className="settings-content"><h2 className="settings-heading">{selected.title}</h2>
+ {profile?.role==='admin'&&<>
+ {group==='business'&&<><QueryState {...query} retry={query.refresh}/>{query.data&&<Panel><SectionTitle title="Información del negocio" subtitle="Moneda y zona horaria comercial fijas para mantener los registros consistentes."/><OperationForm key={query.data.settings?.version??0} action="settings.save" defaults={{version:query.data.settings?.version??0}} label="Guardar cambios" onDone={()=>{setNotice('Configuración guardada correctamente.');query.refresh()}}><label className="form-label">Nombre de la tienda<input name="name" required maxLength={80} pattern=".*\S.*" defaultValue={query.data.settings?.name??''}/></label><label className="form-label">Ubicación<input name="address" maxLength={160} defaultValue={query.data.settings?.address??''}/></label><p>Moneda: COP · Zona horaria: America/Bogota</p></OperationForm></Panel>}<Panel><SectionTitle title="Apariencia" subtitle="Preferencia guardada automáticamente en este dispositivo."/><Button onClick={toggleTheme}>{dark?'Cambiar a modo claro':'Cambiar a modo oscuro'}</Button></Panel></>}
+ {group==='sales'&&<><Panel><SectionTitle title="Preferencias de venta"/><p>Efectivo, transferencia y ventas a crédito con confirmación manual. La numeración se asigna automáticamente.</p></Panel><TransferSettings/></>}
+ {group==='inventory'&&<Panel><SectionTitle title="Preferencias de productos"/><dl className="detail-list"><div><dt>Stock mínimo inicial</dt><dd>5 unidades; editable en cada producto</dd></div><div><dt>Costos</dt><dd>Promedio ponderado al registrar una compra</dd></div><div><dt>Alertas</dt><dd>Productos en su mínimo o por debajo</dd></div></dl><Button asChild><a href="#/inventario">Administrar inventario</a></Button><Button asChild variant="outline"><a href="#/inventario?stock=bajo">Consultar stock bajo</a></Button></Panel>}
+ {group==='cash'&&<Panel><SectionTitle title="Administración de cajas" subtitle="Gestiona tu sesión, sus movimientos y los arqueos en Contabilidad."/><p>Los cierres conservan efectivo esperado, contado, diferencia y observaciones. Las transferencias se registran por separado.</p><Button asChild><a href="#/contabilidad">Ir a Contabilidad</a></Button></Panel>}
+ {group==='whatsapp'&&<WhatsAppSettings/>}
+ {group==='security'&&<Users/>}
+ {group==='maintenance'&&<><Panel><SectionTitle title="Exportación de información"/><div className="heading-actions"><Button asChild variant="outline"><a href="#/estadisticas">Exportar reporte de estadísticas</a></Button><Button asChild variant="outline"><a href="#/contabilidad">Exportar historial de cajas</a></Button></div></Panel><PeriodHistory/><div className="danger-zone"><h3>Operaciones avanzadas · zona de peligro</h3><p>Acceso exclusivo de administradores. El reinicio requiere reautenticación y confirmación explícita.</p><ResetOperation/></div></>}
+ </>}
+ </section></div>
 }
 export function Audit() {
   const [offset, setOffset] = useState(0)

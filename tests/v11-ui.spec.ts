@@ -94,6 +94,7 @@ test('fotografía privada adjunta se conserva al recargar inventario y se muestr
 
 test('reinicio exige identidad y frase destructiva; conserva productos y elimina historial', async ({ page }) => {
   await page.goto('/#/configuracion')
+  await page.getByRole('button',{name:'Datos y mantenimiento Períodos y operaciones avanzadas'}).click()
   await page.getByLabel('Confirma tu contraseña').fill('test-password-not-real')
   await page.getByRole('button', { name: 'Verificar identidad y revisar alcance' }).click()
   await expect(page.getByRole('alert')).toContainText('Las cajas abiertas también se eliminarán')

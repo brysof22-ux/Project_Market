@@ -113,6 +113,8 @@ export function Layout({
         <p className="nav-label">PRINCIPAL</p>
         <nav aria-label="Navegación principal">
           {allowedNavigation.map((item) => (
+            <div key={item.id}>
+            {item.id === 'configuracion' && <p className="nav-label">ADMINISTRACIÓN</p>}
             <a
               key={item.id}
               href={`#/${item.id}`}
@@ -125,6 +127,7 @@ export function Layout({
               <span>{item.label}</span>
               {page === item.id && <span className="active-dot" />}
             </a>
+            </div>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -150,7 +153,7 @@ export function Layout({
           <div className="sidebar-footer">
             <span className="mini-brand">cai</span>
             <span>Hecho para tu negocio.</span>
-            <small>v1.1</small>
+            <small>v1.4</small>
           </div>
         </div>
       </aside>

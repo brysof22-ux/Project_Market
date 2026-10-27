@@ -1,12 +1,12 @@
-export const operationActions = ['whatsapp.status', 'whatsapp.settings', 'whatsapp.contact', 'whatsapp.test', 'whatsapp.retry', 'bootstrap', 'cash.list', 'cash.entries', 'sales.list', 'sales.detail',
+export const operationActions = ['sales.today', 'cash.history', 'cash.detail', 'finance.list', 'finance.summary', 'whatsapp.status', 'whatsapp.settings', 'whatsapp.contact', 'whatsapp.test', 'whatsapp.retry', 'bootstrap', 'cash.list', 'cash.entries', 'sales.list', 'sales.detail',
   'credits.list', 'credit.history', 'users.list', 'audit.list', 'cash.open', 'cash.move', 'cash.close',
   'sale.confirm', 'sale.return', 'credit.limit', 'credit.receipt', 'user.save', 'settings.save', 'report',
   'debts.list', 'debt.detail', 'debt.receipt', 'reset.preview', 'reset.confirm', 'periods.list', 'periods.detail'] as const
 export type OperationAction = typeof operationActions[number]
 export type PaymentMethod = { id: string; code: string; name: string; affects_cash: boolean; requires_reference: boolean }
-export type CashSession = { id: string; register_code: string; operator_id: string; opened_at: string; closed_at: string | null; opening_float: number; expected: number; counted?: number; difference?: number }
+export type CashSession = { id: string; register_code: string; operator_id: string; opened_at: string; closed_at: string | null; opening_float: number; expected: number; counted?: number | null; difference?: number | null }
 export type StoreSettings = { name: string; address: string; version: number }
-export type Bootstrap = { period_id?: string; permissions: { credit: boolean; expenses: boolean }; methods: PaymentMethod[]; session: CashSession | null; settings: StoreSettings | null }
+export type Bootstrap = { business_day?:string; period_id?: string; permissions: { credit: boolean; expenses: boolean }; methods: PaymentMethod[]; session: CashSession | null; settings: StoreSettings | null }
 export type Debt = {
   id: string; charge_id: string; sale_id: string; customer_id: string; name: string; phone: string
   purchased_on: string; due_on: string | null; total: string; initial_payment: string; principal: string
@@ -31,7 +31,7 @@ export type FinancialReport = {
  periods:{period:string;sales:string;expenses:string}[]
 }
 export type WhatsAppStatus = {
- settings:{enabled:boolean;purchases:boolean;receipts:boolean;reminders:boolean;days_before:number;connection_state:string;connected_number?:string|null;last_connection:string|null;last_success:string|null;last_error:string|null}
+ settings:{version?:number;enabled:boolean;purchases:boolean;receipts:boolean;reminders:boolean;days_before:number;connection_state:string;connected_number?:string|null;last_connection:string|null;last_success:string|null;last_error:string|null}
  counts:{pending:number;sent:number;failed:number}
  jobs:{id:string;kind:string;status:string;attempts:number;error_code:string|null;created_at:string;sent_at:string|null}[]
  contacts:{id:string;name:string;phone:string;consented:boolean}[]
@@ -45,3 +45,10 @@ export type Report = {
   top_products: { product_id: string; name: string; quantity: number; total: string }[]
   categories: { category: string; total: string; gross_profit: string | null }[]; methods: { name: string; code: string; total: string }[]
 }
+
+export type TodaySales = {day:string;total:number;summary:{transactions:number;net_sales:string;received:string;credit:string};rows:{id:string;number:number;created_at:string;total:string;customer:string;products:number;methods:string[];status:string;returned:boolean}[]}
+export type FinanceMovement = {id:string;session_id:string;created_at:string;amount:number;method:string;kind:string;concept:string;description:string;purpose:string;responsible:string}
+export type FinancePage = {business_day:string;from:string;to:string;total:number;rows:FinanceMovement[];cash_in:string;cash_out:string;transfer_in:string;transfer_out:string;cash_balance:string;transfer_balance:string}
+export type CashHistoryRow = CashSession & {responsible:string;opening_note:string;closing_note:string|null}
+export type CashHistoryPage = {total:number;rows:CashHistoryRow[]}
+export type CashDetail = CashHistoryRow & {sales_cash:string;receipts_cash:string;extra_cash:string;out_cash:string;transfers:string;movements_total:number;movements:FinanceMovement[]}

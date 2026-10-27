@@ -5,7 +5,7 @@ test('navegación de los ocho módulos y búsqueda global', async ({ page }) => 
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: 'Tu negocio, de un vistazo' }),
+    page.getByRole('heading', { name: 'Estadísticas' }),
   ).toBeVisible()
   for (const title of [
     'Punto de venta',
@@ -133,13 +133,13 @@ test('tema y configuración persistentes con validación de formulario', async (
   await page.reload()
   await expect(page.locator('html')).toHaveClass('dark')
   await page.getByRole('textbox', { name: 'Nombre de la tienda' }).fill('   ')
-  await page.getByRole('button', { name: 'Guardar operación', exact: true }).click()
-  await expect(page.getByText('Configuración guardada.', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click()
+  await expect(page.getByText('Configuración guardada correctamente.', { exact: true })).toHaveCount(0)
   await page
     .getByRole('textbox', { name: 'Nombre de la tienda' })
     .fill('Tienda de prueba')
-  await page.getByRole('button', { name: 'Guardar operación', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Configuración guardada.' })).toBeVisible()
+  await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Configuración guardada correctamente.' })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('textbox', { name: 'Nombre de la tienda' })).toHaveValue('Tienda de prueba')
 })
@@ -154,7 +154,7 @@ for (const viewport of [
     await page.setViewportSize(viewport)
     await page.goto('/')
     await expect(
-      page.getByRole('heading', { name: 'Tu negocio, de un vistazo' }),
+      page.getByRole('heading', { name: 'Estadísticas' }),
     ).toBeVisible()
     if (viewport.width < 760)
       await page.getByRole('button', { name: 'Abrir menú' }).click()
@@ -172,7 +172,7 @@ for (const viewport of [
     ).toBe(true)
     await page.goto('/#/dashboard')
     await expect(
-      page.getByRole('heading', { name: 'Tu negocio, de un vistazo' }),
+      page.getByRole('heading', { name: 'Estadísticas' }),
     ).toBeVisible()
     expect(
       await page.evaluate(

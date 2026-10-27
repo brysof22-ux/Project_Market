@@ -48,12 +48,13 @@ test('optimización JPEG y PNG mantiene proporción y no amplía imágenes peque
  expect(results).toEqual([{width:1200,height:800,type:'image/webp',size:expect.any(Number)},{width:1000,height:1500,type:'image/webp',size:expect.any(Number)},{width:200,height:100,type:'image/webp',size:expect.any(Number)}])
  for(const result of results)expect(result.size).toBeLessThan(200*1024)
 })
-test('contabilidad presenta indicadores y filtros completos, WhatsApp desactivado sin conexión',async({page})=>{
- await page.goto('/#/contabilidad')
+test('estadísticas presenta indicadores y filtros completos, WhatsApp desactivado sin conexión',async({page})=>{
+ await page.goto('/#/estadisticas')
  for(const name of ['Costo de productos vendidos','Utilidad neta estimada','Valor del inventario','Margen bruto'])await expect(page.getByText(name,{exact:true})).toBeVisible()
  await page.getByRole('combobox',{name:'Período de indicadores'}).selectOption('custom')
  await expect(page.getByLabel('Desde',{exact:true})).toBeVisible();await expect(page.getByLabel('Hasta',{exact:true})).toBeVisible()
  await page.goto('/#/configuracion')
+ await page.getByRole('button',{name:'WhatsApp Conexión, consentimiento y avisos'}).click()
  await expect(page.getByRole('heading',{name:'WhatsApp',exact:true})).toBeVisible()
  await expect(page.getByLabel('Activar notificaciones de WhatsApp',{exact:true})).toBeDisabled()
  await expect(page.getByText('Sin configurar',{exact:true})).toBeVisible()

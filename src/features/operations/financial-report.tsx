@@ -3,12 +3,29 @@ import { Area,AreaChart,Bar,BarChart,CartesianGrid,ResponsiveContainer,Tooltip,X
 import { Metric,Panel,SectionTitle } from '../../components/common'
 import {money} from '../../lib/utils'
 import type {Report} from '../../../shared/operations'
+function metricExplanation(label:string,value:string|null) {
+ const unavailable=value===null
+ if(unavailable)return 'Este indicador no se puede calcular con los datos registrados.'
+ const descriptions:Record<string,string>={
+ 'Ventas netas':`Has vendido ${money(Number(value))} en este período, descontando devoluciones.`,
+ 'Dinero recibido':'Es el dinero realmente recibido por ventas y abonos durante este período, menos reintegros.',
+ 'Cuentas por cobrar':'Es el dinero que tus clientes todavía deben pagar. Saldo actual.',
+ 'Costo de productos vendidos':'Es lo que te costaron los productos que ya vendiste.',
+ 'Utilidad bruta':'Es lo que queda de las ventas después de descontar el costo de los productos.',
+ 'Gastos operativos':'Son los gastos registrados para mantener funcionando tu negocio.',
+ 'Utilidad neta estimada':Number(value)<0?'En este período, tus costos y gastos superaron los ingresos de tus ventas.':'Es tu ganancia estimada después de descontar los costos y gastos registrados.',
+ 'Efectivo en caja':'Es el efectivo registrado actualmente en las cajas abiertas.',
+ 'Transferencias recibidas':'Es el dinero recibido mediante transferencias durante este período, menos reintegros.',
+ 'Valor del inventario':'Es el costo estimado de los productos que tienes disponibles.',
+ 'Margen bruto':`Por cada $100 vendidos, ${Number(value)<0?'el costo supera las ventas en':'te quedan'} ${money(Math.abs(Number(value)))} antes de gastos operativos. No es la ganancia final.`}
+ return descriptions[label]??'Datos registrados durante el período seleccionado.'
+}
 export function FinancialMetrics({report}:{report:Report}) {
  const data=report.financial
  if(!data)return null
- const entries:[string,string|null][]=[['Ventas netas',report.net_sales],['Dinero recibido',report.collections],['Cuentas por cobrar',report.outstanding],['Costo de productos vendidos',data.cogs],['Utilidad bruta',report.gross_profit],['Gastos operativos',report.expenses],['Utilidad neta estimada',data.net_profit],['Efectivo en caja',data.cash_on_hand],['Transferencias recibidas',data.transfers_received],['Valor del inventario',data.inventory_value]]
- return <><div className="metrics-grid">{entries.map(([label,value])=><Metric key={label} label={label} value={value===null?'No disponible':money(Number(value))} icon={DollarSign} change={label==='Efectivo en caja'?'Cajas abiertas · saldo actual':'Datos registrados'} note="COP" trend="neutral" />)}
- <Metric label="Margen bruto" value={data.gross_margin===null?'No disponible':`${Number(data.gross_margin).toLocaleString('es-CO',{maximumFractionDigits:2})} %`} icon={DollarSign} change="Utilidad bruta / ventas netas" note="Sin dividir entre cero" trend="neutral" /></div>
+ const entries:[string,string|null][]=[['Ventas netas',report.net_sales],['Dinero recibido',report.collections],['Cuentas por cobrar',report.outstanding],['Utilidad neta estimada',data.net_profit],['Utilidad bruta',report.gross_profit],['Costo de productos vendidos',data.cogs],['Gastos operativos',report.expenses],['Efectivo en caja',data.cash_on_hand],['Transferencias recibidas',data.transfers_received],['Valor del inventario',data.inventory_value]]
+ return <><div className="metrics-grid">{entries.map(([label,value])=><Metric key={label} label={label} value={value===null?'No disponible':money(Number(value))} description={metricExplanation(label,value)} icon={DollarSign} change={label==='Efectivo en caja'?'Cajas abiertas · saldo actual':'Datos registrados'} note="COP" trend={value!==null&&Number(value)<0?'down':'neutral'} />)}
+ <Metric label="Margen bruto" description={metricExplanation('Margen bruto',data.gross_margin)} value={data.gross_margin===null?'No disponible':`${Number(data.gross_margin).toLocaleString('es-CO',{maximumFractionDigits:2})} %`} icon={DollarSign} change="Utilidad bruta / ventas netas" note="Sin dividir entre cero" trend="neutral" /></div>
  {data.unknown_inventory_costs>0&&<p className="notice">Hay {data.unknown_inventory_costs} productos con existencias sin costo conocido. No se inventa el valor del inventario.</p>}
  <p className="muted">Dinero recibido: efectivo {money(Number(data.cash_received))} · transferencias {money(Number(data.transfers_received))}. Los créditos pendientes no son dinero recibido. Las cifras del período incluyen devoluciones y reintegros; caja, cartera e inventario muestran el saldo actual.</p></>
 }

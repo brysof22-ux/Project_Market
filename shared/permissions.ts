@@ -3,7 +3,7 @@ import { catalogActions } from './catalog'
 import { operationActions } from './operations'
 
 // This is a UI/HTTP boundary. PostgreSQL independently authorizes every RPC.
-const adminRoutes = ['dashboard', 'pos', 'inventario', 'estadisticas', 'contabilidad', 'clientes', 'proveedores', 'creditos', 'auditoria', 'configuracion']
+const adminRoutes = ['pos', 'inventario', 'estadisticas', 'contabilidad', 'clientes', 'proveedores', 'creditos', 'auditoria', 'configuracion']
 const cashierRoutes = ['pos', 'creditos']
 const cashierCatalog = ['qr.list', 'qr.read', 'products.list', 'customers.search', 'media.read']
 const cashierOperations = ['bootstrap', 'cash.open', 'cash.close', 'cash.list', 'cash.entries',
@@ -16,7 +16,7 @@ export function canAccessRoute(role: StaffRole | null | undefined, route: string
 export const canAccessPage = canAccessRoute
 
 export function homeRoute(role: StaffRole | null | undefined): string {
-  return role === 'admin' ? 'dashboard' : role === 'cashier' ? 'pos' : ''
+  return role === 'admin' ? 'estadisticas' : role === 'cashier' ? 'pos' : ''
 }
 
 export function canPerform(role: StaffRole | null | undefined, section: 'catalog' | 'operations', action: string): boolean {

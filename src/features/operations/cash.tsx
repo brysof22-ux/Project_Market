@@ -1,67 +1,35 @@
-import { useState } from 'react'
-import { PageHeading, Panel, EmptyState, SectionTitle } from '../../components/common'
-import { Button } from '../../components/ui/button'
-import { useOperationsQuery } from '../catalog/hooks'
-import { QueryState } from '../catalog/common'
-import { AmountField, OperationForm } from './forms'
-import { ReportView } from '../dashboard'
-import { money } from '../../lib/utils'
-import type { Bootstrap, CashSession } from '../../../shared/operations'
-
-export function Accounting() {
-  const bootstrap = useOperationsQuery<Bootstrap>('bootstrap', {})
-  const [offset, setOffset] = useState(0)
-  const history = useOperationsQuery<CashSession[]>('cash.list', { limit: 20, offset })
-  const [revision,setRevision]=useState(0)
-  const [notice, setNotice] = useState('')
-  const [entries, setEntries] = useState<string | null>(null)
-  const done = () => { setRevision(value=>value+1); setNotice('Operación de caja registrada.'); bootstrap.refresh(); history.refresh() }
-  const session = bootstrap.data?.session
-  return <>
-    <PageHeading title="Contabilidad" subtitle="Caja y control financiero operativo. No constituye contabilidad tributaria.">
-      <Button variant="outline" onClick={() => { bootstrap.refresh(); history.refresh() }}>Actualizar caja</Button>
-    </PageHeading>
-    <ReportView embedded revision={revision}/>
-    {notice && <p role="status">{notice}</p>}
-    <QueryState {...bootstrap} retry={bootstrap.refresh} />
-    {bootstrap.data && <div className="settings-grid">
-      <Panel><SectionTitle title={session ? 'Caja abierta' : 'Abrir caja'} />
-        {session ? <><p>Registro: {session.register_code}</p><p>Apertura: {money(session.opening_float)}</p><p>Efectivo esperado: <strong>{money(session.expected)}</strong></p>
-          <OperationForm action="cash.close" defaults={{ session_id: session.id }} onDone={done} label="Confirmar arqueo y cerrar caja">
-            <AmountField name="counted" label="Efectivo contado" min="0" />
-            <p className="muted">El cierre conserva el esperado y la diferencia del arqueo.</p>
-          </OperationForm>
-        </> : <OperationForm action="cash.open" onDone={done} label="Abrir caja">
-          <label className="form-label">Código de caja<input name="register_code" defaultValue="MAIN" required pattern="[A-Za-z0-9_-]{1,30}" maxLength={30} /></label>
-          <AmountField name="opening_float" label="Saldo inicial" min="0" />
-        </OperationForm>}
-      </Panel>
-      {session && bootstrap.data.permissions.expenses && <Panel><SectionTitle title="Ingresos y egresos de efectivo" subtitle="Ajustes de caja distintos de ventas y abonos." />
-        <OperationForm action="cash.move" defaults={{ session_id: session.id }} onDone={done}>
-          <label className="form-label">Tipo<select name="kind"><option value="expense">Gasto / egreso</option><option value="income">Ingreso extraordinario</option></select></label>
-          <AmountField /><label className="form-label">Motivo<input name="reason" required pattern=".*\S.*" maxLength={500} /></label>
-        </OperationForm>
-      </Panel>}
-    </div>}
-    <Panel><SectionTitle title="Historial de cajas" subtitle="Cajas accesibles con tu rol, en páginas de 20 registros." /><QueryState {...history} retry={history.refresh} />
-      <div className="table-scroll"><table><thead><tr><th>CAJA</th><th>APERTURA</th><th>CIERRE</th><th>ESPERADO</th><th>CONTADO</th><th>DIFERENCIA</th><th>MOVIMIENTOS</th></tr></thead>
-        <tbody>{history.data?.map((row) => <tr key={row.id}><td>{row.register_code}</td><td>{new Date(row.opened_at).toLocaleString('es-CO')}</td><td>{row.closed_at ? new Date(row.closed_at).toLocaleString('es-CO') : 'Abierta'}</td>
-          <td>{row.expected === null ? '—' : money(row.expected)}</td><td>{row.counted == null ? '—' : money(row.counted)}</td><td>{row.difference == null ? '—' : money(row.difference)}</td>
-          <td><Button variant="ghost" onClick={() => setEntries(row.id)}>Ver movimientos</Button></td></tr>)}</tbody></table></div>
-      {history.data?.length === 0 && <EmptyState text="No hay cajas registradas." />}
-      <Button variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 20))}>Anterior</Button>
-      <Button variant="outline" disabled={(history.data?.length ?? 0) < 20} onClick={() => setOffset(offset + 20)}>Siguiente</Button>
-    </Panel>
-    {entries && <CashEntries sessionId={entries} />}
-  </>
+import {useState} from 'react'
+import {PageHeading,Panel,SectionTitle,EmptyState,Badge} from '../../components/common'
+import {Button} from '../../components/ui/button'
+import {Dialog} from '../../components/ui/dialog'
+import {useOperationsQuery} from '../catalog/hooks'
+import {QueryState,Pagination} from '../catalog/common'
+import {AmountField,OperationForm} from './forms'
+import {money} from '../../lib/utils'
+import {businessTime,dateRange,downloadCSV,paymentLabel} from '../../lib/business-format'
+import {api} from '../../lib/api'
+import type {Bootstrap,CashSession,CashDetail,CashHistoryPage,FinancePage,FinanceMovement} from '../../../shared/operations'
+const areas=['Control de caja','Movimientos financieros','Historial de cajas','Resumen de ingresos y egresos'] as const
+export function Accounting(){
+ const [area,setArea]=useState<typeof areas[number]>('Control de caja'),[revision,setRevision]=useState(0),[notice,setNotice]=useState(''),[moveKind,setMoveKind]=useState('income')
+ const bootstrap=useOperationsQuery<Bootstrap>('bootstrap',{revision});const session=bootstrap.data?.session
+ const done=()=>{setRevision(v=>v+1);setNotice('Operación de caja registrada correctamente.')}
+ return <><PageHeading title="Contabilidad" subtitle="Gestiona cajas y movimientos. Las ventas y ganancias se analizan en Estadísticas."><Button variant="outline" onClick={()=>setRevision(v=>v+1)}>Actualizar caja</Button></PageHeading>
+ <div className="section-tabs" role="tablist" aria-label="Áreas de contabilidad">{areas.map(item=><button key={item} id={`tab-${areas.indexOf(item)}`} role="tab" tabIndex={area===item?0:-1} aria-controls="accounting-panel" aria-selected={area===item} onClick={()=>setArea(item)} onKeyDown={e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const i=e.key==='Home'?0:e.key==='End'?areas.length-1:(areas.indexOf(area)+(e.key==='ArrowRight'?1:areas.length-1))%areas.length;setArea(areas[i]);document.getElementById(`tab-${i}`)?.focus()}}}>{item}</button>)}</div>
+ {notice&&<p role="status">{notice}</p>}<QueryState {...bootstrap} retry={bootstrap.refresh}/>
+ <div id="accounting-panel" role="tabpanel" aria-labelledby={`tab-${areas.indexOf(area)}`}>
+ {area==='Control de caja'&&bootstrap.data&&<Panel><SectionTitle title={session?'Caja abierta':'Caja cerrada'} subtitle={session?'Tu sesión activa y su efectivo físico.':'No tienes una caja abierta actualmente.'}/>
+ {session?<><CashSessionDetail key={`${session.id}-${revision}`} id={session.id} compact/>
+ <div className="heading-actions"><Button onClick={()=>{setMoveKind('income');setArea('Movimientos financieros')}}>Registrar ingreso</Button><Button variant="outline" onClick={()=>{setMoveKind('expense');setArea('Movimientos financieros')}}>Registrar egreso</Button><Button variant="outline" onClick={()=>setArea('Historial de cajas')}>Consultar movimientos</Button></div>
+ <CloseCash session={session} done={done}/></>:<OperationForm action="cash.open" onDone={done} label="Abrir caja"><label className="form-label">Caja que deseas abrir<input name="register_code" defaultValue="MAIN" required pattern="[A-Za-z0-9_-]{1,30}" maxLength={30}/></label><AmountField name="opening_float" label="Monto inicial en efectivo" min="0" defaultValue="0"/><label className="form-label">Observaciones de apertura<textarea name="note" maxLength={500}/></label></OperationForm>}
+ </Panel>}
+ {area==='Movimientos financieros'&&<><Panel><SectionTitle title="Registrar ingreso o egreso" subtitle="La fecha se registra con el reloj del servidor en Bogotá. Los movimientos quedan asociados a tu sesión."/>{session?<OperationForm key={`${revision}-${moveKind}`} action="cash.move" defaults={{session_id:session.id}} onDone={done} label="Registrar movimiento"><label className="form-label">Tipo de movimiento<select name="kind" defaultValue={moveKind}><option value="income">Ingreso adicional</option><option value="expense">Egreso</option></select></label><AmountField label="Monto"/><label className="form-label">Fecha comercial<input name="date" type="date" readOnly value={bootstrap.data?.business_day??''}/></label><label className="form-label">Método del movimiento<select name="method"><option value="cash">Efectivo</option><option value="transfer">Transferencia</option></select></label><label className="form-label">Clasificación<select name="purpose"><option value="operating">Operativo · gasto del negocio</option><option value="capital">Aporte o retiro de capital</option><option value="internal">Movimiento interno / compra de inventario</option></select></label><label className="form-label">Concepto<input name="reason" required maxLength={500} pattern=".*\S.*"/></label><label className="form-label">Descripción opcional<textarea name="description" maxLength={500}/></label><p>Caja: {session.register_code}</p><p className="muted">Una transferencia no cambia el efectivo físico. Los aportes, retiros y compras de inventario no son ventas ni costo de productos vendidos.</p></OperationForm>:<p>Abre tu caja para registrar movimientos. Cada movimiento conserva su responsable y sesión.</p>}</Panel><FinanceView day={bootstrap.data?.business_day} key={revision}/></>}
+ {area==='Historial de cajas'&&<CashHistory/>}
+ {area==='Resumen de ingresos y egresos'&&<FinanceView day={bootstrap.data?.business_day} key={revision} summary/>}
+ </div></>
 }
-function CashEntries({ sessionId }: { sessionId: string }) {
-  const [offset, setOffset] = useState(0)
-  const query = useOperationsQuery<{ id: string; amount: number; kind: string; created_at: string }[]>('cash.entries', { session_id: sessionId, offset, limit: 20 })
-  return <Panel><SectionTitle title="Movimientos de efectivo" /><QueryState {...query} retry={query.refresh} />
-    <ul>{query.data?.map((row) => <li key={row.id}>{new Date(row.created_at).toLocaleString('es-CO')} · {row.kind} · {money(row.amount)}</li>)}</ul>
-    {!query.data?.length && !query.loading && !query.error && <EmptyState text="Sin movimientos de efectivo." />}
-    <Button variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 20))}>Anterior</Button>
-    <Button variant="outline" disabled={(query.data?.length ?? 0) < 20} onClick={() => setOffset(offset + 20)}>Siguiente</Button>
-  </Panel>
-}
+function CloseCash({session,done}:{session:CashSession;done:()=>void}){const [counted,setCounted]=useState('');const difference=Number(counted)-session.expected;return <details className="close-cash"><summary>Cerrar caja</summary><OperationForm action="cash.close" defaults={{session_id:session.id,expected_cash:session.expected}} onDone={done} label="Confirmar arqueo y cerrar caja"><p>Efectivo esperado: <strong>{money(session.expected)}</strong></p><label className="form-label">Efectivo contado<input name="counted" type="number" step="0.01" min="0" required value={counted} onChange={e=>setCounted(e.target.value)}/></label>{counted!==''&&<p role="status">{difference===0?'Caja cuadrada':difference>0?'Sobrante de efectivo':'Faltante de efectivo'}: {money(difference)}</p>}<label className="form-label">Observaciones de cierre<textarea name="note" maxLength={500}/></label><label className="checkbox-label"><input type="checkbox" required/>Confirmo el efectivo contado y el cierre de esta sesión.</label></OperationForm></details>}
+export function MovementTable({rows}:{rows:FinanceMovement[]}){return <div className="table-scroll"><table><thead><tr>{['Fecha','Tipo','Concepto','Método','Monto','Responsable'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{businessTime(r.created_at)}</td><td><Badge tone={r.amount<0?'amber':'green'}>{r.amount<0?'Egreso':'Ingreso'} · {{sale:'Venta',receipt:'Abono',income:'Adicional',expense:'Salida',refund:'Devolución'}[r.kind]??r.kind}</Badge><small className="contact-phone">{{operating:'Operativo',capital:'Capital',internal:'Interno'}[r.purpose]??''}</small></td><td>{r.concept}{r.description&&<small className="contact-phone">{r.description}</small>}</td><td>{paymentLabel(r.method)}</td><td>{money(r.amount)}</td><td>{r.responsible}</td></tr>)}</tbody></table>{!rows.length&&<EmptyState text="No hay movimientos en este período."/>}</div>}
+function FinanceView({summary=false,day}:{summary?:boolean;day?:string}){const [range,setRange]=useState('today'),[from,setFrom]=useState(''),[to,setTo]=useState(''),[offset,setOffset]=useState(0);const dates=range==='custom'?{from:from||undefined,to:to||undefined}:range==='today'?{}:dateRange(range,day);const query=useOperationsQuery<FinancePage>('finance.list',{...dates,offset,limit:20});const data=query.data;return <Panel><SectionTitle title={summary?'Resumen de ingresos y egresos':'Movimientos registrados'} subtitle="Flujos del período operativo activo. El balance del período excluye el monto inicial; no es un saldo bancario acumulado."/><div className="table-toolbar"><label className="form-label">Período de movimientos<select value={range} onChange={e=>{setRange(e.target.value);setOffset(0)}}><option value="today">Hoy</option><option value="week">Últimos 7 días</option><option value="month">Este mes</option><option value="custom">Rango personalizado</option></select></label>{range==='custom'&&<><label className="form-label">Desde<input type="date" value={from} max={to||undefined} onChange={e=>{setFrom(e.target.value);setOffset(0)}}/></label><label className="form-label">Hasta<input type="date" value={to} min={from||undefined} onChange={e=>{setTo(e.target.value);setOffset(0)}}/></label></>}<Button variant="outline" onClick={query.refresh}>Actualizar movimientos</Button></div><QueryState {...query} retry={query.refresh}/>{data&&<>{summary&&<dl className="daily-summary">{[['Ingresos en efectivo',data.cash_in],['Ingresos por transferencia',data.transfer_in],['Egresos en efectivo',data.cash_out],['Egresos por transferencia',data.transfer_out],['Balance de efectivo del período',data.cash_balance],['Balance de transferencias del período',data.transfer_balance]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{money(Number(value))}</dd></div>)}</dl>}<p className="muted">Fecha comercial actual: {data.business_day}. Del {data.from} al {data.to} · Bogotá.</p><MovementTable rows={data.rows}/><Pagination offset={offset} total={data.total} onChange={setOffset}/></>}</Panel>}
+function CashHistory(){const [filters,setFilters]=useState({from:'',to:'',responsible:'',search:'',status:'all'}),[offset,setOffset]=useState(0),[selected,setSelected]=useState<string|null>(null),[exporting,setExporting]=useState(false),[error,setError]=useState('');const query=useOperationsQuery<CashHistoryPage>('cash.history',{...filters,offset,limit:20});const change=(name:string,value:string)=>{setFilters(v=>({...v,[name]:value}));setOffset(0)};const exportAll=async()=>{setExporting(true);setError('');try{const rows:CashHistoryPage['rows']=[];let next=0;while(true){const page=await api.operations<CashHistoryPage>('cash.history',{...filters,offset:next,limit:100});rows.push(...page.rows);next+=page.rows.length;if(next>=page.total||!page.rows.length)break;if(next>100000)throw Error()}downloadCSV('historial-cajas.csv',[['Caja','Identificador','Apertura','Cierre','Responsable','Inicial','Esperado','Contado','Diferencia'],...rows.map(r=>[r.register_code,r.id,businessTime(r.opened_at),r.closed_at?businessTime(r.closed_at):'Abierta',r.responsible,r.opening_float,r.expected,r.counted,r.difference])])}catch{setError('No se pudo exportar el historial. Intenta nuevamente.')}finally{setExporting(false)}};return <Panel><SectionTitle title="Historial de cajas" subtitle="Incluye sesiones de períodos anteriores. Los cierres son registros conservados." action={<Button variant="outline" disabled={exporting||query.loading} onClick={()=>void exportAll()}>{exporting?'Exportando…':'Exportar historial'}</Button>}/><div className="table-toolbar">{[['search','Buscar caja o identificador'],['responsible','Responsable']].map(([name,label])=><label key={name} className="form-label">{label}<input value={filters[name as keyof typeof filters]} onChange={e=>change(name,e.target.value)}/></label>)}<label className="form-label">Estado de caja<select value={filters.status} onChange={e=>change('status',e.target.value)}><option value="all">Todas</option><option value="open">Abierta</option><option value="closed">Cerrada</option></select></label>{['from','to'].map(name=><label key={name} className="form-label">{name==='from'?'Apertura desde':'Apertura hasta'}<input type="date" value={filters[name as 'from'|'to']} onChange={e=>change(name,e.target.value)}/></label>)}</div>{error&&<p role="alert">{error}</p>}<QueryState {...query} retry={query.refresh}/>{query.data&&<><div className="table-scroll"><table><thead><tr>{['Caja','Apertura','Cierre','Responsable','Inicial','Esperado','Contado','Diferencia','Estado','Detalle'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{query.data.rows.map(r=><tr key={r.id}><td title={r.id}>{r.register_code}<small className="contact-phone">{r.id.slice(0,8)}</small></td><td>{businessTime(r.opened_at)}</td><td>{r.closed_at?businessTime(r.closed_at):'—'}</td><td>{r.responsible}</td><td>{money(r.opening_float)}</td><td>{money(r.expected)}</td><td>{r.counted==null?'—':money(r.counted)}</td><td>{r.difference==null?'—':money(r.difference)}</td><td>{r.closed_at?'Cerrada':'Abierta'}</td><td><Button variant="ghost" onClick={()=>setSelected(r.id)}>Ver movimientos</Button></td></tr>)}</tbody></table></div><Pagination offset={offset} total={query.data.total} onChange={setOffset}/></>}{selected&&<Dialog open onOpenChange={v=>{if(!v)setSelected(null)}} title="Detalle de caja" description="Arqueo, observaciones e historial de movimientos."><CashSessionDetail id={selected}/></Dialog>}</Panel>}
+function CashSessionDetail({id,compact=false}:{id:string;compact?:boolean}){const [offset,setOffset]=useState(0);const query=useOperationsQuery<CashDetail>('cash.detail',{id,offset,limit:20});const d=query.data;return <><QueryState {...query} retry={query.refresh}/>{d&&<><dl className="daily-summary">{[['Caja',d.register_code],['Responsable',d.responsible],['Apertura',businessTime(d.opened_at)],['Cierre',d.closed_at?businessTime(d.closed_at):'Abierta'],['Efectivo inicial',money(d.opening_float)],['Efectivo esperado',money(d.expected)],['Ventas en efectivo',money(Number(d.sales_cash))],['Abonos en efectivo',money(Number(d.receipts_cash))],['Ingresos adicionales',money(Number(d.extra_cash))],['Egresos de efectivo',money(Number(d.out_cash))],['Transferencias netas registradas',money(Number(d.transfers))]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{d.closed_at&&<p>Efectivo contado: {money(d.counted??0)} · Diferencia: {money(d.difference??0)} · {d.difference===0?'Caja cuadrada':(d.difference??0)>0?'Sobrante de efectivo':'Faltante de efectivo'}</p>}<p>Observaciones de apertura: {d.opening_note||'Sin observaciones'}</p>{d.closed_at&&<p>Observaciones de cierre: {d.closing_note||'Sin observaciones'}</p>}{!compact&&<><MovementTable rows={d.movements}/><Pagination offset={offset} total={d.movements_total} onChange={setOffset}/></>}</>}</>}

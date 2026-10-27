@@ -6,11 +6,6 @@ import { Login } from './features/auth/login'
 import { canAccessRoute, homeRoute } from '../shared/permissions'
 import { Button } from './components/ui/button'
 import { OperationPeriod } from './features/operations/period'
-const Dashboard = lazy(() =>
-  import('./features/dashboard').then((module) => ({
-    default: module.Dashboard,
-  })),
-)
 const Inventory = lazy(() =>
   import('./features/inventory').then((module) => ({
     default: module.Inventory,
@@ -33,7 +28,7 @@ const Settings = lazy(() =>
   import('./features/operations/settings').then((module) => ({ default: module.Settings })),
 )
 const Statistics = lazy(() =>
-  import('./features/dashboard').then((module) => ({
+  import('./features/statistics').then((module) => ({
     default: module.Statistics,
   })),
 )
@@ -43,7 +38,8 @@ const Audit = lazy(() => import('./features/operations/settings').then((module) 
 
 function readPage(): PageId {
   const id = window.location.hash.replace('#/', '').split('?')[0]
-  return navigation.find((item) => item.id === id)?.id ?? 'dashboard'
+  if (id === 'dashboard') window.history.replaceState(null,'','#/estadisticas')
+  return navigation.find((item) => item.id === id)?.id ?? 'estadisticas'
 }
 function readTheme() {
   try {
@@ -54,17 +50,23 @@ function readTheme() {
 }
 export default function App() {
   const { session, profile, loading, signOut } = useAuth()
+  useEffect(() => {
+    if (window.location.pathname === '/dashboard' || window.location.hash === '#/dashboard') {
+      window.history.replaceState(null, '', '/#/estadisticas')
+    }
+  }, [])
   const [page, setPage] = useState<PageId>(readPage)
   const [dark, setDark] = useState(readTheme)
   useEffect(() => {
     function handleNavigation() {
+      if (!window.dispatchEvent(new Event('cai:before-navigation', {cancelable:true}))) { window.history.replaceState(null,'',`#/${page}`); return }
       setPage(readPage())
       window.scrollTo({ top: 0 })
       document.getElementById('main')?.focus()
     }
     window.addEventListener('hashchange', handleNavigation)
     return () => window.removeEventListener('hashchange', handleNavigation)
-  }, [])
+  }, [page])
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
     try {
@@ -80,7 +82,6 @@ export default function App() {
   const allowed = canAccessRoute(profile.role, page)
   const visiblePage = allowed ? page : homeRoute(profile.role) as PageId
   const content = {
-    dashboard: <Dashboard />,
     pos: <PointOfSale />,
     inventario: <Inventory />,
     estadisticas: <Statistics />,

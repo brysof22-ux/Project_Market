@@ -1,4 +1,5 @@
 import { useState, useCallback, type FormEvent } from 'react'
+import { Minus, Plus, Search, ShoppingBag } from 'lucide-react'
 import { EmptyState, PageHeading, Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
 import { QueryState, Pagination } from '../catalog/common'
@@ -76,21 +77,27 @@ export function PointOfSale() {
     }
   }
   return <>
-    <PageHeading title="Punto de venta" subtitle="Las ventas confirmadas registran pagos y descuentan existencias de forma transaccional." />
+    <PageHeading title="Punto de venta" subtitle="Encuentra tus productos, prepara la compra y registra los pagos recibidos." />
     {notice && <p role="status">{notice}</p>}
     <QueryState {...bootstrap} retry={bootstrap.refresh} />
     {bootstrap.data && <OwnCash session={bootstrap.data.session} onChanged={() => setRevision((value) => value + 1)} />}
     <div className="pos-grid">
-      <Panel><SectionTitle title="Productos" /><label className="search-field"><input aria-label="Buscar productos para venta" value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar producto por nombre" /></label>
+      <Panel className="pos-catalog"><SectionTitle title="Productos" subtitle="Selecciona un producto para agregarlo a la venta." /><label className="search-field"><Search size={18} aria-hidden="true" /><input aria-label="Buscar productos para venta" value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar producto por nombre" /></label>
         <QueryState {...query} retry={query.refresh} />
         <div className="product-grid">{query.data?.rows.filter((row) => row.active).map((product) => <Button key={product.id} variant="outline"
           className="pos-product-card" aria-label={`Agregar ${product.name}`} disabled={mutation.busy || product.stock <= (cart[product.id]?.quantity ?? 0)} onClick={() => change(product, 1)}>
-          <ProductImage product={product} /><strong>{product.name}</strong><span className="pos-product-price">{money(Number(product.price))}</span><span>{product.stock} disponibles</span></Button>)}</div>
+          <ProductImage product={product} /><strong>{product.name}</strong><span className="pos-product-price">{money(Number(product.price))}</span><span className="pos-product-stock">{product.stock > 0 ? `${product.stock} disponibles` : 'Agotado'}</span></Button>)}</div>
+        {query.data && !query.data.rows.some((row) => row.active) && <EmptyState text="No encontramos productos disponibles con esta búsqueda." />}
         {query.data && <Pagination offset={offset} total={query.data.total} onChange={setOffset} />}
       </Panel>
-      <Panel><SectionTitle title="Venta actual" /><ul>{lines.map(({ product, quantity }) => <li key={product.id}>
-        <strong>{product.name}</strong> · {quantity} × {money(Number(product.price))}
-        <Button variant="ghost" disabled={mutation.busy} aria-label={`Quitar una unidad de ${product.name}`} onClick={() => change(product, -1)}>−</Button>
+      <Panel className="pos-checkout"><SectionTitle title="Venta actual" action={<span className="cart-quantity"><ShoppingBag size={16} aria-hidden="true" />{lines.reduce((count, line) => count + line.quantity, 0)} unidades</span>} /><ul className="cart-lines">{lines.map(({ product, quantity }) => <li className="cart-line" key={product.id}>
+        <div className="cart-item-copy"><strong>{product.name}</strong><span>{money(Number(product.price))} por unidad</span></div>
+        <div className="quantity-controls" aria-label={`Cantidad de ${product.name}`}>
+          <Button variant="outline" size="icon" disabled={mutation.busy} aria-label={`Quitar una unidad de ${product.name}`} onClick={() => change(product, -1)}><Minus size={15} aria-hidden="true" /></Button>
+          <span className="cart-quantity" aria-label={`${quantity} unidades`}>{quantity}</span>
+          <Button variant="outline" size="icon" disabled={mutation.busy || quantity >= product.stock} aria-label={`Agregar una unidad de ${product.name}`} onClick={() => change(product, 1)}><Plus size={15} aria-hidden="true" /></Button>
+        </div>
+        <strong className="cart-amount">{money(((parseMinor(product.price) ?? 0) * quantity) / 100)}</strong>
       </li>)}</ul>{!lines.length && <EmptyState text="Agrega productos al carrito." />}
         <p className="cart-total">Total: <strong>{money(totalMinor / 100)}</strong></p>
         <form className="settings-form" onSubmit={confirm} key={revision} onChange={(event) => {
@@ -99,16 +106,16 @@ export function PointOfSale() {
           <fieldset disabled={mutation.busy} className="business-fieldset">
             <label className="checkbox-label"><input type="checkbox" checked={financed} onChange={(event) => setFinanced(event.target.checked)} />Vender a crédito</label>
             {financed ? <CreditBuyer /> : <label className="form-label">Nombre del comprador (opcional)<input name="buyer_name" maxLength={160} placeholder="Consumidor final" /></label>}
-            {bootstrap.data?.methods.filter((method) => method.code !== 'card').map((method) => <div key={method.id}>
+            <div className="payment-fields">{bootstrap.data?.methods.filter((method) => method.code !== 'card').map((method) => <div key={method.id}>
               <label className="form-label">Pago {method.name}<input name={`amount-${method.id}`} type="number" step="0.01" min="0" max="1000000000000" placeholder="0" onChange={(event) => { if (method.code === 'transfer') setTransfer(Number(event.target.value) > 0) }} /></label>
-            </div>)}
+            </div>)}</div>
             {transfer && <TransferPicker onSelect={selectQR} onReady={readyQR} />}
             {financed && <label className="checkbox-label"><input name="notification_consent" type="checkbox"/>El cliente autoriza avisos de esta compra, abonos y recordatorios por WhatsApp al número indicado</label>}
             {financed && <p className="muted">Los pagos registrados son el abono inicial. El saldo restante se registra como deuda; no necesitas autorizar un cupo.</p>}
             <label className="checkbox-label"><input name="confirm_payments" type="checkbox" required checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confirmo los pagos recibidos. Verifiqué manualmente la recepción de las transferencias.</label>
           </fieldset>
           {(validation || mutation.error) && <p role="alert">{validation || mutation.error}</p>}
-          <Button type="submit" disabled={(transfer && !qrReady) || !lines.length || !confirmed || mutation.busy || !bootstrap.data?.session}>{mutation.busy ? 'Registrando…' : 'Registrar venta'}</Button>
+          <Button className="checkout-submit" type="submit" disabled={(transfer && !qrReady) || !lines.length || !confirmed || mutation.busy || !bootstrap.data?.session}>{mutation.busy ? 'Registrando…' : 'Registrar venta'}</Button>
         </form>
       </Panel>
     </div>

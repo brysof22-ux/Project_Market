@@ -1,7 +1,7 @@
 import { Button } from '../../components/ui/button'
 
 export function QueryState({ loading, error, retry }: { loading: boolean; error: string; retry: () => void }) {
-  if (loading) return <p role="status" className="empty-state">Cargando información…</p>
+  if (loading) return <div role="status" className="query-loading"><span className="loading-indicator" aria-hidden="true" /><span>Cargando información…</span><div className="skeleton-lines" aria-hidden="true"><i /><i /><i /></div></div>
   if (!error) return null
   return <div role="alert" className="notice">{error} <Button variant="outline" onClick={retry}>Reintentar</Button></div>
 }

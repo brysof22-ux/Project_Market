@@ -15,9 +15,9 @@ export function SalesHistory({ revision = 0, customerId, title = 'Historial de v
   const [selected, setSelected] = useState<string | null>(null)
   const query = useOperationsQuery<SalesPage>('sales.list', { offset, limit: 20, revision, ...(customerId ? { customer_id: customerId } : {}) })
   return <Panel><SectionTitle title={title} /><QueryState {...query} retry={query.refresh} />
-    {query.data && <><div className="table-scroll"><table><thead><tr><th>VENTA</th><th>FECHA</th><th>CLIENTE</th><th>TOTAL</th><th>ESTADO</th><th>DETALLE</th></tr></thead>
-      <tbody>{query.data.rows.map((row) => <tr key={row.id}><td>V-{row.number}</td><td>{new Date(row.created_at).toLocaleString('es-CO')}</td><td>{row.customer ?? 'Consumidor final'}</td><td>{money(Number(row.total))}</td><td><Badge tone={row.returned ? 'neutral' : 'green'}>{row.returned ? 'Devuelta' : 'Registrada'}</Badge></td>
-        <td><Button variant="ghost" onClick={() => setSelected(row.id)}>Ver venta V-{row.number}</Button></td></tr>)}</tbody></table>{!query.data.rows.length && <EmptyState text="No hay ventas registradas." />}</div>
+    {query.data && <><div className="table-scroll" tabIndex={0} role="region" aria-label={title}><table><thead><tr><th>VENTA</th><th>FECHA</th><th>CLIENTE</th><th className="numeric-cell">TOTAL</th><th>ESTADO</th><th>DETALLE</th></tr></thead>
+      <tbody>{query.data.rows.map((row) => <tr key={row.id}><td><strong>V-{row.number}</strong></td><td>{new Date(row.created_at).toLocaleString('es-CO')}</td><td>{row.customer ?? 'Consumidor final'}</td><td className="numeric-cell">{money(Number(row.total))}</td><td><Badge tone={row.returned ? 'neutral' : 'green'}>{row.returned ? 'Devuelta' : 'Registrada'}</Badge></td>
+        <td><Button variant="ghost" size="sm" aria-label={`Ver venta V-${row.number}`} onClick={() => setSelected(row.id)}>Ver detalle</Button></td></tr>)}</tbody></table>{!query.data.rows.length && <EmptyState text="No hay ventas registradas." />}</div>
       <Pagination offset={offset} total={query.data.total} onChange={setOffset} /></>}
     {selected && <Dialog open onOpenChange={(open) => { if (!open) setSelected(null) }} title="Detalle de venta" description="Registro original y operaciones de devolución asociadas.">
       <SaleDetail id={selected} returned={() => { setSelected(null); query.refresh(); onChanged?.() }} />
@@ -31,8 +31,8 @@ export function SaleDetail({ id, returned }: { id: string; returned: () => void 
   const { profile } = useAuth()
   const detail = query.data
   return <><QueryState {...query} retry={query.refresh} />
-    {detail && <><h3>Venta V-{detail.number}</h3><p>{businessTime(detail.created_at)} · {detail.customer??'Consumidor final'}</p><p>Estado: {detail.return?'Devuelta':detail.credit&&detail.credit.outstanding>0?'Pendiente':'Completada'}</p><p>Total original: <strong>{money(detail.total)}</strong></p><ul>{detail.items.map((item) => <li key={item.id}>{item.quantity} × {item.name_snapshot} · {money(item.unit_price)}</li>)}</ul>
-      <ul>{detail.payments.map(payment=><li key={payment.id}>{payment.method??'Pago'} · {money(payment.amount)}</li>)}</ul><p>Pagos registrados: {money(detail.payments.reduce((sum, payment) => sum + payment.amount, 0))}</p>
+    {detail && <><h3>Venta V-{detail.number}</h3><p>{businessTime(detail.created_at)} · {detail.customer??'Consumidor final'}</p><p>Estado: <Badge tone={detail.return?'neutral':detail.credit&&detail.credit.outstanding>0?'amber':'green'}>{detail.return?'Devuelta':detail.credit&&detail.credit.outstanding>0?'Pendiente':'Completada'}</Badge></p><p>Total original: <strong>{money(detail.total)}</strong></p><ul className="detail-lines">{detail.items.map((item) => <li key={item.id}>{item.quantity} × {item.name_snapshot} · {money(item.unit_price)}</li>)}</ul>
+      <ul className="detail-lines">{detail.payments.map(payment=><li key={payment.id}>{payment.method??'Pago'} · {money(payment.amount)}</li>)}</ul><p>Pagos registrados: {money(detail.payments.reduce((sum, payment) => sum + payment.amount, 0))}</p>
       {detail.credit && <p>Saldo de crédito: {money(detail.credit.outstanding)} · {detail.credit.due_on ? `Vence: ${detail.credit.due_on}` : 'Sin vencimiento'}</p>}
       {detail.return ? <p>Devolución: {detail.return.reason} · Reintegro: {money(detail.return.refund_amount)} · Deuda cancelada: {money(detail.return.credit_reduction)}</p>
         : profile?.role === 'admin' && bootstrap.data?.session && <OperationForm action="sale.return" defaults={{ sale_id: id, session_id: bootstrap.data.session.id }} onDone={returned} label="Confirmar devolución completa">

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowDownLeft, ArrowUpRight, type LucideIcon } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Inbox, type LucideIcon } from 'lucide-react'
 import {MetricTooltip} from './metric-tooltip'
 import { cn } from '../lib/utils'
 
@@ -46,7 +46,7 @@ export function Metric({
   change,
   icon: Icon,
   trend = 'up',
-  note = 'vs. ayer',
+  note,
   description,
 }: {
   label: string
@@ -66,7 +66,7 @@ export function Metric({
         </span>
       </div>
       <strong>{value}</strong>
-      <div className="metric-bottom">
+      {(change || note) && <div className="metric-bottom">
         <span className={`trend ${trend === 'neutral' ? 'trend-neutral' : ''}`}>
           {trend === 'up' ? (
             <ArrowUpRight size={14} />
@@ -75,8 +75,8 @@ export function Metric({
           ) : null}
           {change}
         </span>
-        <span>{note}</span>
-      </div>
+        {note && <span>{note}</span>}
+      </div>}
     </Panel>
   )
   return description ? <MetricTooltip title={label} description={description} value={value} state={trend==='down'?'negative':trend==='up'?'positive':'neutral'}>{content}</MetricTooltip> : content
@@ -86,7 +86,7 @@ export function EmptyState({
 }: {
   text?: string
 }) {
-  return <p className="empty-state">{text}</p>
+  return <div className="empty-state"><Inbox size={24} aria-hidden="true" /><p>{text}</p></div>
 }
 
 export function PageHeading({

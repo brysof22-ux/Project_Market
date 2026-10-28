@@ -7,6 +7,8 @@ import {
   LogOut,
   Menu,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   ShoppingBag,
   Store,
@@ -37,11 +39,43 @@ export function Layout({
     cashier: 'Cajero',
   }[profile?.role ?? 'cashier']
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [compact, setCompact] = useState(() => {
+    try { return localStorage.getItem('cai-market:navigation:v1') === 'compact' } catch { return false }
+  })
+  const [smallScreen, setSmallScreen] = useState(() => window.matchMedia('(max-width: 760px)').matches)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
   const [search, setSearch] = useState('')
   const [popover, setPopover] = useState<
     'notifications' | 'profile' | 'help' | null
   >(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 760px)')
+    const resize = () => { setSmallScreen(media.matches); if (!media.matches) setMobileOpen(false) }
+    media.addEventListener('change', resize)
+    return () => media.removeEventListener('change', resize)
+  }, [])
+  useEffect(() => {
+    if (!mobileOpen || !smallScreen) return
+    const menuTrigger = menuRef.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    sidebarRef.current?.querySelector<HTMLElement>('a,button')?.focus()
+    function trap(event: KeyboardEvent) {
+      if (event.key !== 'Tab') return
+      const items = Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') ?? []).filter(item => item.getClientRects().length)
+      const first = items[0], last = items.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
+    document.addEventListener('keydown', trap)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', trap)
+      menuTrigger?.focus()
+    }
+  }, [mobileOpen, smallScreen])
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -60,7 +94,7 @@ export function Layout({
   const current = navigation.find((item) => item.id === page)!
   const allowedNavigation = navigation.filter((item) => canAccessRoute(profile?.role, item.id))
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${compact ? 'sidebar-collapsed' : ''}`}>
       <a
         href="#main"
         className="skip-link"
@@ -79,18 +113,27 @@ export function Layout({
         />
       )}
       <aside
+        ref={sidebarRef}
         id="main-navigation"
         className={`sidebar ${mobileOpen ? 'is-open' : ''}`}
+        inert={smallScreen && !mobileOpen}
+        role={smallScreen && mobileOpen ? 'dialog' : undefined}
+        aria-modal={smallScreen && mobileOpen ? true : undefined}
+        aria-label="Menú de la tienda"
       >
         <a className="brand" href={`#/${homeRoute(profile?.role)}`}>
           <span className="brand-mark">
             <ShoppingBag size={23} strokeWidth={1.8} />
           </span>
-          <span>
+          <span className="brand-wordmark">
             cai<span className="brand-light">market</span>
             <small>GESTIÓN DE TIENDA</small>
           </span>
         </a>
+        <Button className="sidebar-collapse" variant="ghost" size="icon" aria-label={compact ? 'Expandir menú' : 'Contraer menú'} aria-expanded={!compact} aria-controls="main-navigation" onClick={() => {
+          setCompact(!compact)
+          try { localStorage.setItem('cai-market:navigation:v1', compact ? 'full' : 'compact') } catch { /* Navigation also works without storage. */ }
+        }}>{compact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</Button>
         <Button
           variant="ghost"
           size="icon"
@@ -119,6 +162,8 @@ export function Layout({
               key={item.id}
               href={`#/${item.id}`}
               aria-label={item.label}
+              title={compact && !smallScreen ? item.label : undefined}
+              data-label={item.label}
               aria-current={page === item.id ? 'page' : undefined}
               className={`nav-item ${page === item.id ? 'active' : ''} ${item.id === 'configuracion' ? 'nav-settings' : ''}`}
               onClick={() => setMobileOpen(false)}
@@ -141,11 +186,11 @@ export function Layout({
               <br />
               Estamos para ayudarte.
             </p>
-            <button onClick={() => setPopover('help')}>
+            <button onClick={() => { setMobileOpen(false); setPopover('help') }}>
               Centro de ayuda <ArrowIcon />
             </button>
           </div>
-          <button className="theme-toggle" onClick={toggleTheme}>
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={dark ? 'Modo claro' : 'Modo oscuro'} title={compact ? (dark ? 'Modo claro' : 'Modo oscuro') : undefined}>
             {dark ? <Sun size={17} /> : <Moon size={17} />}
             <span>{dark ? 'Modo claro' : 'Modo oscuro'}</span>
             <span className={`switch ${dark ? 'on' : ''}`} />
@@ -157,14 +202,17 @@ export function Layout({
           </div>
         </div>
       </aside>
-      <div className="workspace">
+      <div className="workspace" inert={smallScreen && mobileOpen}>
         <header className="topbar">
           <div className="breadcrumb">
             <Button
               variant="ghost"
               size="icon"
               className="mobile-menu"
+              ref={menuRef}
               aria-label="Abrir menú"
+              aria-expanded={mobileOpen}
+              aria-controls="main-navigation"
               onClick={() => setMobileOpen(true)}
             >
               <Menu size={20} />
@@ -225,7 +273,6 @@ export function Layout({
               }
             >
               <Bell size={19} />
-              <span />
             </Button>
             <button
               className="profile"
@@ -243,7 +290,7 @@ export function Layout({
               </span>
               <span className="profile-label">
                 <strong title={identity}>{identity}</strong>
-                <small>Sesión activa</small>
+                <small>{roleLabel}</small>
               </span>
               <ChevronDown size={14} />
             </button>
@@ -278,11 +325,6 @@ export function Layout({
           </div>
         )}
         <main id="main" tabIndex={-1}>
-          <div className="demo-strip">
-            <span>Control operativo</span>
-            <span className="demo-separator">·</span>
-            <span>Datos registrados en la tienda</span>
-          </div>
           {children}
           <footer className="main-footer">
             <span>© 2026 CAI Market</span>

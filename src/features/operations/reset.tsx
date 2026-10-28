@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { AlertTriangle, Clock3, ShieldCheck } from 'lucide-react'
 import { Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
 import { useAuth } from '../auth/context'
@@ -36,10 +37,12 @@ export function ResetOperation() {
     } catch (cause) { setError(cause instanceof ApiError ? cause.message : 'No se pudo verificar el reinicio. No se realizaron cambios.') }
     finally { setBusy(false) }
   }
-  return <Panel><SectionTitle title="Administración · Reiniciar operación" />
-    <p className="notice">Elimina permanentemente todas las ventas, pagos, devoluciones, deudas, abonos, movimientos de caja y notificaciones comerciales de todos los períodos. No se archivan ni se respaldan. Conserva usuarios, clientes, proveedores, productos, fotos, precios, mínimos, métodos de pago, QR y configuración.</p>
-    <p>Las existencias quedan en cero y la siguiente venta será V-1. Esta acción es irreversible dentro de la aplicación. El borrado no elimina obligaciones de conservación de información que resulten aplicables.</p>
+  return <Panel className="reset-panel"><SectionTitle title="Administración · Reiniciar operación" subtitle="Revisa el alcance antes de autorizar una eliminación permanente." />
+    <div className="reset-warning"><AlertTriangle size={22} aria-hidden="true"/><div><strong>Esta acción es irreversible</strong><p>Elimina permanentemente todas las ventas, pagos, devoluciones, deudas, abonos, movimientos de caja y notificaciones comerciales de todos los períodos. No se archivan ni se respaldan.</p></div></div>
+    <p className="reset-description">Conserva usuarios, clientes, proveedores, productos, fotos, precios, mínimos, métodos de pago, QR y configuración. Las existencias quedan en cero y la siguiente venta será V-1.</p>
+    <p className="muted">El borrado no elimina obligaciones de conservación de información que resulten aplicables.</p>
     <form className="settings-form" onSubmit={verify}>
+      <h3 className="reset-step"><ShieldCheck size={19} aria-hidden="true"/>1. Verifica tu identidad</h3>
       <label className="form-label">Confirma tu contraseña<input name="password" type="password" required autoComplete="current-password" disabled={busy || mutation.busy} /></label>
       <Button type="submit" variant="outline" disabled={busy || mutation.busy}>{busy ? 'Verificando identidad…' : 'Verificar identidad y revisar alcance'}</Button>
     </form>
@@ -49,15 +52,18 @@ export function ResetOperation() {
       const data = new FormData(event.currentTarget)
       if (await mutation.run('reset.confirm', { intent_id: preview.intent_id, expected_period: preview.period_id,
         confirmation: data.get('confirmation'), reason: data.get('reason') })) window.location.reload()
-    }}><fieldset disabled={mutation.busy} className="business-fieldset">
-      <p>Período: {preview.period_id}</p><p>Ventas: {preview.sales} · Deudas: {preview.debts} · Saldo por eliminar: <strong>{money(Number(preview.outstanding))}</strong> · Existencias que pasarán a cero: <strong>{preview.stock}</strong> · Cajas abiertas: <strong>{preview.open_sessions}</strong></p>
-      <p>Confirmación válida hasta {new Date(preview.expires_at).toLocaleTimeString('es-CO')}. Si los datos cambian, debes revisar el alcance nuevamente.</p>
+    }}><fieldset disabled={mutation.busy} className="business-fieldset reset-confirmation">
+      <h3 className="reset-step">2. Revisa los datos afectados</h3>
+      <p className="muted">Período: <code className="record-id">{preview.period_id}</code></p>
+      <dl className="reset-summary">{[['Ventas',preview.sales],['Deudas',preview.debts],['Saldo por eliminar',money(Number(preview.outstanding))],['Existencias que pasarán a cero',preview.stock],['Cajas abiertas',preview.open_sessions]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <p className="reset-expiry"><Clock3 size={16} aria-hidden="true"/><span>Confirmación válida hasta {new Date(preview.expires_at).toLocaleTimeString('es-CO')}. Si los datos cambian, debes revisar el alcance nuevamente.</span></p>
       {preview.open_sessions > 0 && <p role="alert">Las cajas abiertas también se eliminarán al confirmar.</p>}
+      <h3 className="reset-step">3. Autoriza el reinicio</h3>
       <label className="form-label">Motivo del reinicio<input name="reason" required minLength={5} maxLength={500} pattern=".*\S.*" /></label>
       <label className="form-label">Escribe ELIMINAR OPERACION<input name="confirmation" required pattern="ELIMINAR OPERACION" autoComplete="off" /></label>
       <label className="checkbox-label"><input type="checkbox" required />He revisado el alcance y autorizo eliminar permanentemente la operación comercial.</label>
     </fieldset>{mutation.error && <p role="alert">{mutation.error}</p>}
-      <Button type="submit" disabled={mutation.busy}>{mutation.busy ? 'Reiniciando de forma atómica…' : 'Eliminar operación permanentemente'}</Button>
+      <Button type="submit" className="button-destructive" disabled={mutation.busy}>{mutation.busy ? 'Reiniciando de forma atómica…' : 'Eliminar operación permanentemente'}</Button>
     </form>}
   </Panel>
 }

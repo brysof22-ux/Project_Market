@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { History, Pencil, Plus, Search } from 'lucide-react'
 import { Badge, EmptyState, PageHeading, Panel } from '../../components/common'
 import { Button } from '../../components/ui/button'
 import { Dialog } from '../../components/ui/dialog'
@@ -39,16 +40,16 @@ export function Directory({ type }: { type: 'clientes' | 'proveedores' }) {
   const rows = supplier ? query.data?.suppliers : query.data?.customers
   const total = (supplier ? query.data?.suppliers_total : query.data?.customers_total) ?? 0
   return <>
-    <PageHeading title={supplier ? 'Proveedores' : 'Clientes'} subtitle="Directorio registrado en la tienda.">
-      <Button onClick={() => setEditor({ contact: null })}>{supplier ? 'Nuevo proveedor' : 'Nuevo cliente'}</Button>
+    <PageHeading title={supplier ? 'Proveedores' : 'Clientes'} subtitle={supplier ? 'Organiza los contactos que abastecen tu negocio.' : 'Consulta tus contactos y el historial de sus compras.'}>
+      <Button onClick={() => setEditor({ contact: null })}><Plus size={17} aria-hidden="true" />{supplier ? 'Nuevo proveedor' : 'Nuevo cliente'}</Button>
     </PageHeading>
     {saved && <p role="status">Contacto guardado.</p>}
-    <Panel><div className="table-toolbar"><label className="search-field"><input aria-label={`Buscar ${type}`} value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar por nombre…" /></label></div>
+    <Panel><div className="table-toolbar"><label className="search-field"><Search size={18} aria-hidden="true" /><input aria-label={`Buscar ${type}`} value={search} maxLength={100} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar por nombre…" /></label></div>
       <QueryState {...query} retry={query.refresh} />
-      {rows && <><div className="table-scroll"><table><thead><tr><th>NOMBRE</th><th>CORREO</th><th>TELÉFONO</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
+      {rows && <><div className="table-scroll" tabIndex={0} role="region" aria-label="Directorio de contactos"><table><thead><tr><th>NOMBRE</th><th>CORREO</th><th>TELÉFONO</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
         <tbody>{rows.map((contact) => <tr key={contact.id}><td><strong>{contact.name}</strong></td><td>{contact.email || '—'}</td><td>{contact.phone || '—'}</td>
-          <td><Badge tone={contact.active ? 'green' : 'neutral'}>{contact.active ? 'Activo' : 'Inactivo'}</Badge></td><td><Button variant="ghost" onClick={() => setEditor({ contact })}>Editar {contact.name}</Button>
-            {!supplier && <Button variant="ghost" onClick={() => setHistory(contact)}>Compras de {contact.name}</Button>}</td></tr>)}</tbody></table>
+          <td><Badge tone={contact.active ? 'green' : 'neutral'}>{contact.active ? 'Activo' : 'Inactivo'}</Badge></td><td><div className="row-actions"><Button variant="ghost" size="sm" aria-label={`Editar ${contact.name}`} onClick={() => setEditor({ contact })}><Pencil size={15} aria-hidden="true" />Editar</Button>
+            {!supplier && <Button variant="ghost" size="sm" aria-label={`Compras de ${contact.name}`} onClick={() => setHistory(contact)}><History size={15} aria-hidden="true" />Compras</Button>}</div></td></tr>)}</tbody></table>
         {!rows.length && <EmptyState text="No hay contactos registrados para esta búsqueda." />}</div><Pagination offset={offset} total={total} onChange={setOffset} /></>}
     </Panel>
     {!supplier && history && <SalesHistory key={history.id} customerId={history.id} title={`Compras de ${history.name}`} />}

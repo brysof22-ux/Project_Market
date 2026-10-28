@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { EmptyState, PageHeading, Panel, SectionTitle } from '../../components/common'
+import { Badge, EmptyState, PageHeading, Panel, SectionTitle } from '../../components/common'
 import { Button } from '../../components/ui/button'
 import { QueryState, Pagination } from '../catalog/common'
 import { useOperationsMutation, useOperationsQuery, useSearch } from '../catalog/hooks'
@@ -23,14 +23,14 @@ export function Credits() {
           <option value="pending">Pendientes</option><option value="overdue">Vencidas</option><option value="paid">Pagadas / liquidadas</option><option value="all">Todas</option>
         </select></label>
       </div><QueryState {...query} retry={query.refresh} />
-      <div className="table-scroll"><table><thead><tr><th>PERSONA</th><th>COMPRA</th><th>PRODUCTOS</th><th>TOTAL</th><th>ABONOS</th><th>SALDO</th><th>ESTADO</th><th>DETALLE</th></tr></thead>
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Compras a crédito y saldos"><table><thead><tr><th>PERSONA</th><th>COMPRA</th><th>PRODUCTOS</th><th className="numeric-cell">TOTAL</th><th className="numeric-cell">ABONOS</th><th className="numeric-cell">SALDO</th><th>ESTADO</th><th>DETALLE</th></tr></thead>
         <tbody>{query.data?.rows.map((debt) => <tr key={debt.charge_id}>
           <td><strong>{debt.name}</strong><small className="contact-phone">{debt.phone}</small><small className="contact-phone">ID persona: {debt.customer_id}</small></td>
           <td>{debt.purchased_on}<small className="contact-phone">{debt.due_on ? `Vence: ${debt.due_on}` : 'Sin vencimiento'}</small></td>
           <td>{debt.products.map((item, index) => <div key={index}>{item.quantity} × {item.name}</div>)}</td>
-          <td>{money(Number(debt.total))}</td><td>{money(Number(debt.paid))}</td><td>{money(Number(debt.outstanding))}</td>
-          <td>{debt.returned ? 'Devuelta' : ({ pending: 'Pendiente', overdue: 'Vencida', paid: 'Pagada' })[debt.status]}</td>
-          <td><Button variant="ghost" onClick={() => setSelected(debt.charge_id)}>Ver deuda de {debt.name}</Button></td>
+          <td className="numeric-cell">{money(Number(debt.total))}</td><td className="numeric-cell">{money(Number(debt.paid))}</td><td className="numeric-cell"><strong>{money(Number(debt.outstanding))}</strong></td>
+          <td><Badge tone={debt.returned ? 'neutral' : debt.status === 'paid' ? 'green' : 'amber'}>{debt.returned ? 'Devuelta' : ({ pending: 'Pendiente', overdue: 'Vencida', paid: 'Pagada' })[debt.status]}</Badge></td>
+          <td><Button variant="ghost" size="sm" aria-label={`Ver deuda de ${debt.name}`} onClick={() => setSelected(debt.charge_id)}>Ver detalle</Button></td>
         </tr>)}</tbody></table></div>
       {query.data && !query.data.rows.length && <EmptyState text="No hay deudas con estos filtros." />}
       {query.data && <Pagination offset={offset} total={query.data.total} onChange={setOffset} />}
@@ -57,10 +57,10 @@ function DebtHistory({ chargeId, onChanged }: { chargeId: string; onChanged: () 
   const debt = detail.data
   return <Panel><SectionTitle title="Detalle e historial de pagos" /><QueryState {...detail} retry={detail.refresh} />
     {debt && <><p><strong>{debt.name}</strong> · {debt.phone}</p><p>Compra: {debt.purchased_on} · {debt.due_on ? `Vence: ${debt.due_on}` : 'Sin vencimiento'}</p>
-      <ul>{debt.products.map((item, index) => <li key={index}>{item.quantity} × {item.name} · {money(Number(item.total))}</li>)}</ul>
-      <p>Total: {money(Number(debt.total))} · Abono inicial: {money(Number(debt.initial_payment))} · Abonos posteriores: {money(Number(debt.paid) - Number(debt.initial_payment))} · Saldo: <strong>{money(Number(debt.outstanding))}</strong></p>
+      <ul className="detail-lines">{debt.products.map((item, index) => <li key={index}>{item.quantity} × {item.name} · {money(Number(item.total))}</li>)}</ul>
+      <dl className="daily-summary"><div><dt>Total de la compra</dt><dd>{money(Number(debt.total))}</dd></div><div><dt>Abono inicial</dt><dd>{money(Number(debt.initial_payment))}</dd></div><div><dt>Abonos posteriores</dt><dd>{money(Number(debt.paid) - Number(debt.initial_payment))}</dd></div><div><dt>Saldo pendiente</dt><dd>{money(Number(debt.outstanding))}</dd></div></dl>
       {debt.returned && <p className="notice">Compra devuelta · Reintegro: {money(Number(debt.refund_amount))} · Deuda cancelada por devolución: {money(Number(debt.return_credit_reduction))}. La reducción por devolución no es un abono.</p>}
-      <h3>Historial de pagos</h3><ul>{debt.receipts.map((receipt) => <li key={receipt.id}>{new Date(receipt.received_at).toLocaleString('es-CO')} · {receipt.kind === 'initial_payment' ? 'Pago inicial · ' : ''}{money(Number(receipt.amount))} · {receipt.method}{receipt.reference ? ` · ${receipt.reference}` : ''}</li>)}</ul>
+      <h3>Historial de pagos</h3><ul className="detail-lines">{debt.receipts.map((receipt) => <li key={receipt.id}>{new Date(receipt.received_at).toLocaleString('es-CO')} · {receipt.kind === 'initial_payment' ? 'Pago inicial · ' : ''}{money(Number(receipt.amount))} · {receipt.method}{receipt.reference ? ` · ${receipt.reference}` : ''}</li>)}</ul>
       {notice && <p role="status">{notice}</p>}
       {Number(debt.outstanding) > 0 && <><QueryState {...bootstrap} retry={bootstrap.refresh} />
         {bootstrap.data?.session ? <form className="settings-form" onSubmit={async (event) => {

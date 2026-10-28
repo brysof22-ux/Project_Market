@@ -1,7 +1,7 @@
 // shadcn/ui Dialog composition with Radix focus management and keyboard support.
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
-import type { ReactNode, RefObject } from 'react'
+import { useRef, type ReactNode, type RefObject } from 'react'
 import { Button } from './button'
 
 export function Dialog({
@@ -19,6 +19,7 @@ export function Dialog({
   children: ReactNode
   returnFocusRef?: RefObject<HTMLElement | null>
 }) {
+  const openingElement = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
@@ -26,9 +27,10 @@ export function Dialog({
         <DialogPrimitive.Content
           className="dialog-content"
           onCloseAutoFocus={(event) => {
-            if (returnFocusRef?.current?.isConnected) {
+            const target = returnFocusRef?.current ?? openingElement.current
+            if (target?.isConnected) {
               event.preventDefault()
-              returnFocusRef.current.focus()
+              target.focus()
             }
           }}
         >

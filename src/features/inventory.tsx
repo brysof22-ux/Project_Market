@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { History, PackagePlus, Pencil, Plus, Search } from 'lucide-react'
 import { Badge, EmptyState, PageHeading, Panel, SectionTitle } from '../components/common'
 import { Button } from '../components/ui/button'
 import { Dialog } from '../components/ui/dialog'
@@ -106,23 +107,23 @@ export function Inventory() {
   const done = () => { setEditor(null); setNotice('Operación guardada.'); query.refresh() }
   return <>
     <PageHeading title="Inventario" subtitle="Catálogo y existencias registradas en la tienda.">
-      {canEdit && <Button onClick={() => setEditor({ kind: 'product', product: null })}>Nuevo producto</Button>}
+      {canEdit && <Button onClick={() => setEditor({ kind: 'product', product: null })}><Plus size={17} aria-hidden="true" />Nuevo producto</Button>}
     </PageHeading>
     {notice && <p role="status">{notice}</p>}
     <Panel><SectionTitle title="Catálogo de productos" subtitle="Productos, fotografías y existencias" />
       <div className="table-toolbar">
-        <label className="search-field"><input aria-label="Buscar productos" value={search} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar productos…" maxLength={100} /></label>
+        <label className="search-field"><Search size={18} aria-hidden="true" /><input aria-label="Buscar productos" value={search} onChange={(event) => { setSearch(event.target.value); setOffset(0) }} placeholder="Buscar productos…" maxLength={100} /></label>
         <label className="checkbox-label"><input type="checkbox" checked={lowOnly} onChange={(event) => { setLowOnly(event.target.checked); setOffset(0) }} />Solo stock bajo</label>
         <Button variant="outline" onClick={query.refresh}>Actualizar</Button>
       </div>
       <QueryState {...query} retry={query.refresh} />
-      {query.data && <><div className="table-scroll"><table><thead><tr>
-        <th>FOTO</th><th>PRODUCTO</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th>ACCIONES</th>
+      {query.data && <><div className="table-scroll" tabIndex={0} role="region" aria-label="Catálogo de productos y existencias"><table><thead><tr>
+        <th>FOTO</th><th>PRODUCTO</th><th className="numeric-cell">PRECIO</th><th className="numeric-cell">EXISTENCIAS</th><th>ESTADO</th><th>ACCIONES</th>
       </tr></thead><tbody>{query.data.rows.map((product) => <tr key={product.id}>
-        <td><ProductImage product={product} /></td><td><strong>{product.name}</strong></td><td>{money(Number(product.price))}</td><td>{product.stock} unidades</td>
-        <td><Badge tone={!product.active ? 'neutral' : product.stock <= product.minimum ? 'amber' : 'green'}>{!product.active ? 'Inactivo' : product.stock <= product.minimum ? 'Stock bajo' : 'Disponible'}</Badge></td>
-        <td>{canEdit && <><Button variant="ghost" onClick={() => setEditor({ kind: 'product', product })}>Editar {product.name}</Button><Button variant="ghost" disabled={!product.active} onClick={() => setEditor({ kind: 'stock', product })}>Mover {product.name}</Button></>}
-          <Button variant="ghost" onClick={() => setEditor({ kind: 'history', product })}>Historial {product.name}</Button></td>
+        <td><ProductImage product={product} /></td><td><strong>{product.name}</strong></td><td className="numeric-cell">{money(Number(product.price))}</td><td className="numeric-cell">{product.stock} unidades</td>
+        <td><Badge tone={!product.active ? 'neutral' : product.stock <= product.minimum ? 'amber' : 'green'}>{!product.active ? 'Inactivo' : product.stock === 0 ? 'Agotado' : product.stock <= product.minimum ? 'Stock bajo' : 'Disponible'}</Badge></td>
+        <td><div className="row-actions">{canEdit && <><Button variant="ghost" size="sm" aria-label={`Editar ${product.name}`} onClick={() => setEditor({ kind: 'product', product })}><Pencil size={15} aria-hidden="true" />Editar</Button><Button variant="ghost" size="sm" aria-label={`Mover ${product.name}`} disabled={!product.active} onClick={() => setEditor({ kind: 'stock', product })}><PackagePlus size={15} aria-hidden="true" />Reabastecer</Button></>}
+          <Button variant="ghost" size="sm" aria-label={`Historial ${product.name}`} onClick={() => setEditor({ kind: 'history', product })}><History size={15} aria-hidden="true" />Historial</Button></div></td>
       </tr>)}</tbody></table>{!query.data.rows.length && <EmptyState />}</div>
         <Pagination offset={offset} total={query.data.total} onChange={setOffset} /></>}
     </Panel>
